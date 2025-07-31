@@ -1,34 +1,49 @@
 import { logger } from '../utils/logger';
+import { ImapService } from './ImapService';
+import { AiService } from './AiService';
+import { NotificationService } from './NotificationService';
+import { setImapService } from '../routes/accounts';
 
-export class ImapService {
-  async initialize(): Promise<void> {
-    logger.info('✅ IMAP Service initialized (stub)');
-  }
-}
-
-export class AiService {
-  async initialize(): Promise<void> {
-    logger.info('✅ AI Service initialized (stub)');
-  }
-  
-  async classifyEmail(email: any): Promise<{ category: string; confidence: number }> {
-    return { category: 'interested', confidence: 0.8 };
-  }
-}
-
-export class NotificationService {
-  async processInterestedEmail(email: any): Promise<void> {
-    logger.info(`📱 Processing: ${email.subject}`);
-  }
-}
+let imapService: ImapService;
+let aiService: AiService;
+let notificationService: NotificationService;
 
 export async function initializeServices(): Promise<void> {
-  const imapService = new ImapService();
-  const aiService = new AiService();
-  const notificationService = new NotificationService();
-  
-  await imapService.initialize();
-  await aiService.initialize();
-  
-  logger.info('🎉 All services initialized');
+  try {
+    // Initialize services
+    notificationService = new NotificationService();
+    aiService = new AiService();
+    imapService = new ImapService();
+    
+    // Set up service dependencies
+    setImapService(imapService);
+    
+    // Initialize all services
+    await imapService.initialize();
+    await aiService.initialize();
+    
+    logger.info('🎉 All services initialized successfully');
+  } catch (error) {
+    logger.error('Failed to initialize services:', error);
+    throw error;
+  }
 }
+
+export { imapService, aiService, notificationService };
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('Received SIGTERM, shutting down gracefully...');
+  if (imapService) {
+    await imapService.shutdown();
+  }
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  logger.info('Received SIGINT, shutting down gracefully...');
+  if (imapService) {
+    await imapService.shutdown();
+  }
+  process.exit(0);
+});
