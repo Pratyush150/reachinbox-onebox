@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { ChevronDownIcon, KeyboardArrowDownIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 // Import our enhanced modular components
 import Sidebar from './layout/Sidebar';
@@ -10,150 +10,43 @@ import ComposeModal from './ui/ComposeModal';
 import EmailList from './email/EmailList';
 import EmailDetail from './email/EmailDetail';
 
-// Mock data with additional emails for different folders
-const mockEmails = [
-  {
-    id: '1',
-    messageId: 'msg-001',
-    from: { address: 'john.doe@startup.com', name: 'John Doe' },
-    to: [{ address: 'support@reachinbox.com', name: 'Support' }],
-    subject: 'Very interested in your product!',
-    textBody: 'Hi there! I saw your product demo and I am very interested. Can we schedule a call to discuss pricing and implementation? Our team is looking for a solution exactly like yours and we have budget allocated for this quarter.',
-    receivedDate: new Date('2024-01-31T10:30:00'),
-    aiCategory: 'interested',
-    aiConfidence: 0.92,
-    isRead: false,
-    folder: 'inbox',
-    isStarred: false,
-    attachments: []
+// API Configuration
+const API_BASE = 'http://65.1.63.189:5001/api/v1';
+
+// API Service
+const apiService = {
+  async fetchEmails(folder = 'inbox', page = 1, limit = 50) {
+    const response = await fetch(`${API_BASE}/emails?folder=${folder}&page=${page}&limit=${limit}`);
+    const data = await response.json();
+    return data.success ? data.data.emails : [];
   },
-  {
-    id: '2',
-    messageId: 'msg-002',
-    from: { address: 'sarah@techcorp.com', name: 'Sarah Johnson' },
-    to: [{ address: 'support@reachinbox.com', name: 'Support' }],
-    subject: 'Meeting confirmed for tomorrow',
-    textBody: 'Hi, just confirming our meeting tomorrow at 2 PM. I have added it to my calendar and looking forward to our discussion about the enterprise plan.',
-    receivedDate: new Date('2024-01-31T09:45:00'),
-    aiCategory: 'meeting_booked',
-    aiConfidence: 0.95,
-    isRead: true,
-    folder: 'inbox',
-    isStarred: true,
-    attachments: [{ name: 'meeting-agenda.pdf', size: '245 KB' }]
+
+  async fetchEmailStats() {
+    const response = await fetch(`${API_BASE}/emails/stats`);
+    const data = await response.json();
+    return data.success ? data.data : {};
   },
-  {
-    id: '3',
-    messageId: 'msg-003',
-    from: { address: 'mike@company.com', name: 'Mike Wilson' },
-    to: [{ address: 'support@reachinbox.com', name: 'Support' }],
-    subject: 'Not a good fit for our needs',
-    textBody: 'Thank you for reaching out, but your solution is not suitable for our current needs.',
-    receivedDate: new Date('2024-01-31T08:20:00'),
-    aiCategory: 'not_interested',
-    aiConfidence: 0.88,
-    isRead: true,
-    folder: 'inbox',
-    isStarred: false,
-    attachments: []
+
+  async markEmailRead(emailId) {
+    const response = await fetch(`${API_BASE}/emails/${emailId}/read`, { method: 'PUT' });
+    return response.json();
   },
-  {
-    id: '4',
-    messageId: 'msg-004',
-    from: { address: 'noreply@marketing.com', name: 'Marketing Team' },
-    to: [{ address: 'support@reachinbox.com', name: 'Support' }],
-    subject: 'CONGRATULATIONS! You have won $1,000,000!!!',
-    textBody: 'Claim your prize now! Limited time offer!',
-    receivedDate: new Date('2024-01-31T07:15:00'),
-    aiCategory: 'spam',
-    aiConfidence: 0.99,
-    isRead: false,
-    folder: 'inbox',
-    isStarred: false,
-    attachments: []
+
+  async bulkAction(action, emailIds) {
+    const response = await fetch(`${API_BASE}/emails/bulk-actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, emailIds })
+    });
+    return response.json();
   },
-  // Sent emails
-  {
-    id: 'sent-1',
-    messageId: 'sent-001',
-    from: { address: 'admin@reachinbox.com', name: 'Admin User' },
-    to: [{ address: 'client@company.com', name: 'Client' }],
-    subject: 'Thank you for your interest',
-    textBody: 'Thank you for reaching out about our product. I would love to schedule a demo.',
-    receivedDate: new Date('2024-01-30T15:30:00'),
-    aiCategory: 'interested',
-    aiConfidence: 0.90,
-    isRead: true,
-    folder: 'sent',
-    isStarred: false,
-    attachments: []
-  },
-  // Draft emails
-  {
-    id: 'draft-1',
-    messageId: 'draft-001',
-    from: { address: 'admin@reachinbox.com', name: 'Admin User' },
-    to: [{ address: 'prospect@company.com', name: 'Prospect' }],
-    subject: 'Follow-up on our conversation',
-    textBody: 'Hi there, I wanted to follow up on our conversation about...',
-    receivedDate: new Date('2024-01-30T14:00:00'),
-    aiCategory: 'interested',
-    aiConfidence: 0.85,
-    isRead: false,
-    folder: 'drafts',
-    isStarred: false,
-    attachments: []
-  },
-  // Scheduled emails
-  {
-    id: 'scheduled-1',
-    messageId: 'scheduled-001',
-    from: { address: 'admin@reachinbox.com', name: 'Admin User' },
-    to: [{ address: 'prospect@bigco.com', name: 'Prospect' }],
-    subject: 'Follow-up: Product Demo',
-    textBody: 'Hi, just following up on our product demo. Would you like to schedule a call to discuss implementation?',
-    receivedDate: new Date('2024-02-05T10:00:00'),
-    aiCategory: 'interested',
-    aiConfidence: 0.88,
-    isRead: false,
-    folder: 'scheduled',
-    isStarred: false,
-    attachments: [],
-    scheduledFor: new Date('2024-02-05T10:00:00')
-  },
-  {
-    id: 'scheduled-2',
-    messageId: 'scheduled-002',
-    from: { address: 'admin@reachinbox.com', name: 'Admin User' },
-    to: [{ address: 'client@startup.com', name: 'Client' }],
-    subject: 'Weekly check-in',
-    textBody: 'Hi there, hope your week is going well. Let me know if you need any assistance.',
-    receivedDate: new Date('2024-02-03T09:00:00'),
-    aiCategory: 'interested',
-    aiConfidence: 0.75,
-    isRead: false,
-    folder: 'scheduled',
-    isStarred: false,
-    attachments: [],
-    scheduledFor: new Date('2024-02-03T09:00:00')
-  },
-  // Archived emails
-  {
-    id: 'archive-1',
-    messageId: 'archive-001',
-    from: { address: 'old@client.com', name: 'Old Client' },
-    to: [{ address: 'support@reachinbox.com', name: 'Support' }],
-    subject: 'Old conversation',
-    textBody: 'This is an old email that has been archived.',
-    receivedDate: new Date('2024-01-15T10:00:00'),
-    aiCategory: 'interested',
-    aiConfidence: 0.80,
-    isRead: true,
-    folder: 'archive',
-    isStarred: false,
-    attachments: []
+
+  async searchEmails(query) {
+    const response = await fetch(`${API_BASE}/emails/search?q=${encodeURIComponent(query)}`);
+    const data = await response.json();
+    return data.success ? data.data.emails : [];
   }
-];
+};
 
 // Enhanced Notification Component
 const NotificationToast = ({ notification, onClose, isDarkMode }) => {
@@ -219,45 +112,55 @@ const NotificationToast = ({ notification, onClose, isDarkMode }) => {
 // Enhanced Account Selector Dropdown Component
 const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [accounts, setAccounts] = useState([]);
 
-  const accounts = [
-    { 
-      id: 'account1', 
-      email: 'support@reachinbox.com', 
-      name: 'ReachInbox Support',
-      unread: 23,
-      provider: 'Gmail'
-    },
-    { 
-      id: 'account2', 
-      email: 'sales@reachinbox.com', 
-      name: 'ReachInbox Sales',
-      unread: 8,
-      provider: 'Outlook'
-    },
-    { 
-      id: 'account3', 
-      email: 'admin@kairostudio.in', 
-      name: 'Kairo Studio Admin',
-      unread: 5,
-      provider: 'Gmail'
-    }
-  ];
+  useEffect(() => {
+    // Fetch real accounts from API
+    const fetchAccounts = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/accounts`);
+        const data = await response.json();
+        if (data.success) {
+          setAccounts(data.data.map(account => ({
+            id: account._id,
+            email: account.email,
+            name: account.email.split('@')[0],
+            unread: 0, // Will be updated with real stats
+            provider: account.provider || 'Gmail'
+          })));
+        }
+      } catch (error) {
+        console.error('Failed to fetch accounts:', error);
+        // Fallback to mock data
+        setAccounts([{
+          id: 'account1',
+          email: 'support@kairostudio.in',
+          name: 'Support',
+          unread: 23,
+          provider: 'GoDaddy'
+        }]);
+      }
+    };
+
+    fetchAccounts();
+  }, []);
 
   const selectedAccountData = accounts.find(a => a.id === selectedAccount) || accounts[0];
+
+  if (!selectedAccountData) return null;
 
   return (
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-3 w-full p-3 rounded-xl transition-colors border shadow-sm ${
-          isDarkMode 
-            ? 'bg-slate-800/60 border-slate-600/40 text-white hover:bg-slate-800/80 shadow-slate-900/20' 
+          isDarkMode
+            ? 'bg-slate-800/60 border-slate-600/40 text-white hover:bg-slate-800/80 shadow-slate-900/20'
             : 'bg-white/80 border-gray-200/60 text-gray-900 hover:bg-white shadow-gray-900/5'
         }`}
       >
         <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-lg">
-          {selectedAccountData.name.charAt(0)}
+          {selectedAccountData.name.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 text-left">
           <div className="font-semibold text-sm">{selectedAccountData.name}</div>
@@ -275,8 +178,8 @@ const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
 
       {isOpen && (
         <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl shadow-xl backdrop-blur-sm z-30 animate-in slide-in-from-top-2 duration-200 border ${
-          isDarkMode 
-            ? 'bg-slate-800/95 border-slate-600/40 shadow-slate-900/40' 
+          isDarkMode
+            ? 'bg-slate-800/95 border-slate-600/40 shadow-slate-900/40'
             : 'bg-white/95 border-gray-200/60 shadow-gray-900/20'
         }`}>
           {accounts.map((account) => (
@@ -287,15 +190,15 @@ const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
                 setIsOpen(false);
               }}
               className={`w-full flex items-center gap-3 p-3 text-left transition-colors first:rounded-t-xl last:rounded-b-xl ${
-                selectedAccount === account.id 
-                  ? 'bg-blue-500/20 text-blue-400' 
-                  : isDarkMode 
-                    ? 'text-slate-300 hover:bg-slate-700/50' 
+                selectedAccount === account.id
+                  ? 'bg-blue-500/20 text-blue-400'
+                  : isDarkMode
+                    ? 'text-slate-300 hover:bg-slate-700/50'
                     : 'text-gray-700 hover:bg-gray-100/50'
               }`}
             >
               <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                {account.name.charAt(0)}
+                {account.name.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1">
                 <div className="font-semibold text-sm">{account.name}</div>
@@ -308,11 +211,11 @@ const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
               )}
             </button>
           ))}
-          
+
           <div className={`border-t p-2 ${isDarkMode ? 'border-slate-600/40' : 'border-gray-200/60'}`}>
             <button className={`w-full flex items-center justify-center gap-2 p-2 rounded-lg transition-colors text-sm ${
-              isDarkMode 
-                ? 'text-slate-400 hover:text-white hover:bg-slate-700/50' 
+              isDarkMode
+                ? 'text-slate-400 hover:text-white hover:bg-slate-700/50'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
             }`}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -346,8 +249,8 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-colors border shadow-sm ${
-          isDarkMode 
-            ? 'bg-slate-800/60 border-slate-600/40 text-white hover:bg-slate-800/80 shadow-slate-900/20' 
+          isDarkMode
+            ? 'bg-slate-800/60 border-slate-600/40 text-white hover:bg-slate-800/80 shadow-slate-900/20'
             : 'bg-white/80 border-gray-200/60 text-gray-900 hover:bg-white shadow-gray-900/5'
         }`}
       >
@@ -358,8 +261,8 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
 
       {isOpen && (
         <div className={`absolute top-full left-0 mt-2 w-48 rounded-xl shadow-xl backdrop-blur-sm z-20 animate-in slide-in-from-top-2 duration-200 border ${
-          isDarkMode 
-            ? 'bg-slate-800/95 border-slate-600/40 shadow-slate-900/40' 
+          isDarkMode
+            ? 'bg-slate-800/95 border-slate-600/40 shadow-slate-900/40'
             : 'bg-white/95 border-gray-200/60 shadow-gray-900/20'
         }`}>
           {folders.map((folder) => (
@@ -370,10 +273,10 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
                 setIsOpen(false);
               }}
               className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors first:rounded-t-xl last:rounded-b-xl ${
-                selectedFolder === folder.key 
-                  ? 'bg-blue-500/20 text-blue-400' 
-                  : isDarkMode 
-                    ? 'text-slate-300 hover:bg-slate-700/50' 
+                selectedFolder === folder.key
+                  ? 'bg-blue-500/20 text-blue-400'
+                  : isDarkMode
+                    ? 'text-slate-300 hover:bg-slate-700/50'
                     : 'text-gray-700 hover:bg-gray-100/50'
               }`}
             >
@@ -389,7 +292,8 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
 
 const EmailDashboard = () => {
   // State management
-  const [emails, setEmails] = useState(mockEmails);
+  const [emails, setEmails] = useState([]); // FIXED: Removed mock data
+  const [emailStats, setEmailStats] = useState({});
   const [selectedCategory, setSelectedCategory] = useState('inbox');
   const [selectedEmailId, setSelectedEmailId] = useState(null);
   const [selectedAccount, setSelectedAccount] = useState('account1');
@@ -402,65 +306,96 @@ const EmailDashboard = () => {
   const [notification, setNotification] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
-  // Calculate email counts by folder and category
+  // Load emails on component mount and category change
+  useEffect(() => {
+    const loadEmails = async () => {
+      setIsLoading(true);
+      try {
+        const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150); // FIXED: Increased limit
+        const stats = await apiService.fetchEmailStats();
+        
+        setEmails(fetchedEmails);
+        setEmailStats(stats);
+      } catch (error) {
+        console.error('Failed to load emails:', error);
+        setNotification({
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to load emails from API'
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadEmails();
+  }, [selectedCategory]);
+
+  // Search functionality
+  useEffect(() => {
+    if (searchTerm) {
+      const performSearch = async () => {
+        setIsLoading(true);
+        try {
+          const searchResults = await apiService.searchEmails(searchTerm);
+          setEmails(searchResults);
+        } catch (error) {
+          console.error('Search failed:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      const searchTimer = setTimeout(performSearch, 300);
+      return () => clearTimeout(searchTimer);
+    }
+  }, [searchTerm]);
+
+  // Calculate email counts from API stats
   const emailCounts = useMemo(() => {
+    if (emailStats.folders && emailStats.status) {
+      return {
+        inbox: emailStats.folders.inbox || 0,
+        sent: emailStats.folders.sent || 0,
+        drafts: emailStats.folders.drafts || 0,
+        scheduled: emailStats.folders.scheduled || 0,
+        archive: emailStats.folders.archive || 0,
+        deleted: emailStats.folders.deleted || 0,
+        total: emailStats.status.total || 0,
+        unread: emailStats.status.unread || 0,
+        interested: emailStats.categories?.interested || 0,
+        meeting_booked: emailStats.categories?.meeting_booked || 0,
+        not_interested: emailStats.categories?.not_interested || 0,
+        spam: emailStats.categories?.spam || 0,
+        out_of_office: emailStats.categories?.out_of_office || 0
+      };
+    }
+    
+    // Fallback calculation from current emails
     const counts = {
-      inbox: 0,
-      sent: 0,
-      drafts: 0,
-      scheduled: 0,
-      archive: 0,
-      deleted: 0,
-      total: emails.length,
-      unread: 0,
-      interested: 0,
-      meeting_booked: 0,
-      not_interested: 0,
-      spam: 0,
-      out_of_office: 0
+      inbox: 0, sent: 0, drafts: 0, scheduled: 0, archive: 0, deleted: 0,
+      total: emails.length, unread: 0,
+      interested: 0, meeting_booked: 0, not_interested: 0, spam: 0, out_of_office: 0
     };
 
     emails.forEach(email => {
-      // Folder counts
       if (counts.hasOwnProperty(email.folder)) {
         counts[email.folder]++;
       }
-      
-      // Status counts
       if (!email.isRead) counts.unread++;
-      
-      // Category counts
       if (counts.hasOwnProperty(email.aiCategory)) {
         counts[email.aiCategory]++;
       }
     });
 
     return counts;
-  }, [emails]);
+  }, [emailStats, emails]);
 
   // Filter emails based on category, search, and filters
   const filteredEmails = useMemo(() => {
     let filtered = emails;
 
-    // Filter by folder/category
-    if (['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'deleted'].includes(selectedCategory)) {
-      filtered = filtered.filter(email => email.folder === selectedCategory);
-    } else if (selectedCategory !== 'all') {
-      filtered = filtered.filter(email => email.aiCategory === selectedCategory);
-    }
-
-    // Filter by search term
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase();
-      filtered = filtered.filter(email =>
-        email.subject.toLowerCase().includes(searchLower) ||
-        email.from.name?.toLowerCase().includes(searchLower) ||
-        email.from.address.toLowerCase().includes(searchLower) ||
-        email.textBody.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Apply additional filters
+    // Apply additional filters (search is handled by API)
     if (activeFilters.length > 0) {
       filtered = filtered.filter(email => {
         return activeFilters.some(filter => {
@@ -489,129 +424,118 @@ const EmailDashboard = () => {
     }
 
     return filtered.sort((a, b) => new Date(b.receivedDate) - new Date(a.receivedDate));
-  }, [emails, selectedCategory, searchTerm, activeFilters]);
+  }, [emails, activeFilters]);
 
-  const selectedEmail = selectedEmailId ? emails.find(e => e.id === selectedEmailId) : null;
+  const selectedEmail = selectedEmailId ? emails.find(e => e._id === selectedEmailId || e.id === selectedEmailId) : null;
 
   // Event handlers
   const handleSearch = useCallback((term) => {
     setSearchTerm(term);
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 300);
   }, []);
 
   const handleFilterChange = useCallback((filters) => {
     setActiveFilters(filters);
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 200);
   }, []);
 
-  const handleEmailSelect = useCallback((emailId) => {
+  const handleEmailSelect = useCallback(async (emailId) => {
     setSelectedEmailId(emailId);
-    
-    // Mark email as read when selected
-    setEmails(prevEmails => 
-      prevEmails.map(email => 
-        email.id === emailId ? { ...email, isRead: true } : email
-      )
-    );
+
+    // Mark email as read via API
+    try {
+      await apiService.markEmailRead(emailId);
+      setEmails(prevEmails =>
+        prevEmails.map(email =>
+          (email._id === emailId || email.id === emailId) ? { ...email, isRead: true } : email
+        )
+      );
+    } catch (error) {
+      console.error('Failed to mark email as read:', error);
+    }
   }, []);
 
-  const handleBulkAction = useCallback((action, emailIds) => {
-    setEmails(prevEmails => {
-      return prevEmails.map(email => {
-        if (emailIds.includes(email.id)) {
-          switch (action) {
-            case 'markRead':
-              return { ...email, isRead: true };
-            case 'markUnread':
-              return { ...email, isRead: false };
-            case 'archive':
-              return { ...email, folder: 'archive' };
-            case 'delete':
-              return { ...email, folder: 'deleted' };
-            case 'star':
-              return { ...email, isStarred: !email.isStarred };
-            default:
-              return email;
-          }
-        }
-        return email;
+  const handleBulkAction = useCallback(async (action, emailIds) => {
+    try {
+      const result = await apiService.bulkAction(action, emailIds);
+      
+      if (result.success) {
+        // Reload emails to reflect changes
+        const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150);
+        setEmails(fetchedEmails);
+        
+        setNotification({
+          type: 'success',
+          title: 'Action completed',
+          message: result.message
+        });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      setNotification({
+        type: 'error',
+        title: 'Action failed',
+        message: error.message
       });
-    });
+    }
+  }, [selectedCategory]);
 
-    setNotification({
-      type: 'success',
-      title: 'Action completed',
-      message: `${action} applied to ${emailIds.length} email(s)`
-    });
-  }, []);
-
-  const handleEmailAction = useCallback((action, emailId, data = null) => {
-    setEmails(prevEmails => {
-      return prevEmails.map(email => {
-        if (email.id === emailId) {
-          switch (action) {
-            case 'star':
-              return { ...email, isStarred: !email.isStarred };
-            case 'archive':
-              return { ...email, folder: 'archive' };
-            case 'delete':
-              return { ...email, folder: 'deleted' };
-            case 'reply':
-              console.log('Sending reply:', data);
-              return email;
-            default:
-              return email;
-          }
-        }
-        return email;
-      });
-    });
-
-    if (['archive', 'delete'].includes(action) && selectedEmailId === emailId) {
-      setSelectedEmailId(null);
+  const handleEmailAction = useCallback(async (action, emailId, data = null) => {
+    if (!emailId || emailId === 'undefined') {
+      console.error('Invalid email ID:', emailId);
+      return;
     }
 
-    if (['archive', 'delete', 'reply'].includes(action)) {
-      const actionMessages = {
-        archive: 'Email archived successfully',
-        delete: 'Email moved to deleted',
-        reply: 'Reply sent successfully'
-      };
-      
+    try {
+      let apiAction;
+      switch (action) {
+        case 'star':
+          apiAction = `${API_BASE}/emails/${emailId}/star`;
+          break;
+        case 'archive':
+          apiAction = `${API_BASE}/emails/${emailId}/archive`;
+          break;
+        case 'delete':
+          apiAction = 'delete'; // Use bulk action
+          break;
+        default:
+          console.log('Action not implemented via API:', action);
+          return;
+      }
+
+      if (action === 'delete') {
+        await apiService.bulkAction('delete', [emailId]);
+      } else {
+        await fetch(apiAction, { method: 'PUT' });
+      }
+
+      // Reload emails
+      const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150);
+      setEmails(fetchedEmails);
+
+      if (['archive', 'delete'].includes(action) && selectedEmailId === emailId) {
+        setSelectedEmailId(null);
+      }
+
       setNotification({
         type: 'success',
         title: `Email ${action}d`,
-        message: actionMessages[action]
+        message: `Email ${action} completed successfully`
+      });
+    } catch (error) {
+      setNotification({
+        type: 'error',
+        title: 'Action failed',
+        message: error.message
       });
     }
-  }, [selectedEmailId]);
+  }, [selectedEmailId, selectedCategory]);
 
   const handleComposeSend = useCallback((emailData) => {
-    const newEmail = {
-      id: `sent-${Date.now()}`,
-      messageId: `sent-${Date.now()}`,
-      from: { address: 'admin@reachinbox.com', name: 'Admin User' },
-      to: [{ address: emailData.to, name: '' }],
-      subject: emailData.subject,
-      textBody: emailData.body,
-      receivedDate: new Date(),
-      aiCategory: 'interested',
-      aiConfidence: 0.90,
-      isRead: true,
-      folder: emailData.scheduled ? 'scheduled' : 'sent',
-      isStarred: false,
-      attachments: emailData.attachments || [],
-      scheduledFor: emailData.scheduled || null
-    };
-
-    setEmails(prev => [newEmail, ...prev]);
     setNotification({
       type: 'success',
       title: emailData.scheduled ? 'Email scheduled!' : 'Email sent!',
-      message: emailData.scheduled 
-        ? `Email scheduled for ${new Date(emailData.scheduled).toLocaleString()}` 
+      message: emailData.scheduled
+        ? `Email scheduled for ${new Date(emailData.scheduled).toLocaleString()}`
         : `Email sent to ${emailData.to}`
     });
   }, []);
@@ -657,7 +581,7 @@ const EmailDashboard = () => {
             break;
         }
       }
-      
+
       if (e.key === 'Delete' && selectedEmailId) {
         e.preventDefault();
         handleEmailAction('delete', selectedEmailId);
@@ -682,88 +606,85 @@ const EmailDashboard = () => {
     if (['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'deleted'].includes(selectedCategory)) {
       return selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1);
     }
-    return selectedCategory.split('_').map(word => 
+    return selectedCategory.split('_').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
   };
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${
-      isDarkMode 
-        ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900' 
+      isDarkMode
+        ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900'
         : 'bg-gradient-to-br from-slate-50 via-white to-slate-100'
     }`}>
       <style jsx>{`
-        /* Enhanced Gradient Scrollbar Styles */
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
           height: 8px;
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-track {
           background: ${isDarkMode ? 'rgba(15, 23, 42, 0.3)' : 'rgba(241, 245, 249, 0.8)'};
           border-radius: 8px;
           margin: 4px;
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: ${isDarkMode 
-            ? 'linear-gradient(45deg, rgba(59, 130, 246, 0.6), rgba(139, 92, 246, 0.6))' 
+          background: ${isDarkMode
+            ? 'linear-gradient(45deg, rgba(59, 130, 246, 0.6), rgba(139, 92, 246, 0.6))'
             : 'linear-gradient(45deg, rgba(59, 130, 246, 0.8), rgba(139, 92, 246, 0.8))'};
           border-radius: 8px;
           border: ${isDarkMode ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(59, 130, 246, 0.4)'};
           transition: all 0.3s ease;
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: ${isDarkMode 
-            ? 'linear-gradient(45deg, rgba(59, 130, 246, 0.8), rgba(139, 92, 246, 0.8))' 
+          background: ${isDarkMode
+            ? 'linear-gradient(45deg, rgba(59, 130, 246, 0.8), rgba(139, 92, 246, 0.8))'
             : 'linear-gradient(45deg, rgba(59, 130, 246, 1), rgba(139, 92, 246, 1))'};
           border: ${isDarkMode ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(59, 130, 246, 0.6)'};
           transform: scale(1.1);
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar-corner {
           background: transparent;
         }
-        
-        /* Firefox */
+
         .custom-scrollbar {
           scrollbar-width: thin;
-          scrollbar-color: ${isDarkMode 
-            ? 'rgba(59, 130, 246, 0.6) rgba(15, 23, 42, 0.3)' 
+          scrollbar-color: ${isDarkMode
+            ? 'rgba(59, 130, 246, 0.6) rgba(15, 23, 42, 0.3)'
             : 'rgba(59, 130, 246, 0.8) rgba(241, 245, 249, 0.8)'};
         }
 
-        /* Enhanced reply scrollbar */
         .reply-scrollbar::-webkit-scrollbar {
           width: 6px;
         }
-        
+
         .reply-scrollbar::-webkit-scrollbar-track {
           background: ${isDarkMode ? 'rgba(30, 41, 59, 0.5)' : 'rgba(248, 250, 252, 0.8)'};
           border-radius: 6px;
         }
-        
+
         .reply-scrollbar::-webkit-scrollbar-thumb {
           background: linear-gradient(180deg, #3b82f6, #8b5cf6, #ec4899);
           border-radius: 6px;
           transition: all 0.3s ease;
         }
-        
+
         .reply-scrollbar::-webkit-scrollbar-thumb:hover {
           background: linear-gradient(180deg, #2563eb, #7c3aed, #db2777);
           transform: scale(1.2);
         }
       `}</style>
-      
+
       <div className="flex h-screen overflow-hidden">
         {/* Enhanced Theme Toggle */}
         <button
           onClick={() => setIsDarkMode(!isDarkMode)}
           className={`fixed top-4 right-4 z-50 p-3 rounded-xl transition-all duration-200 border shadow-lg ${
-            isDarkMode 
-              ? 'bg-slate-800/90 text-yellow-400 hover:bg-slate-700/90 border-slate-600/50 shadow-slate-900/50' 
+            isDarkMode
+              ? 'bg-slate-800/90 text-yellow-400 hover:bg-slate-700/90 border-slate-600/50 shadow-slate-900/50'
               : 'bg-white/90 text-slate-600 hover:bg-slate-100/90 border-gray-300/50 shadow-gray-500/20'
           } backdrop-blur-sm`}
           title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
@@ -778,7 +699,7 @@ const EmailDashboard = () => {
             </svg>
           )}
         </button>
-        
+
         {/* Enhanced Sidebar */}
         <Sidebar
           selectedCategory={selectedCategory}
@@ -796,8 +717,8 @@ const EmailDashboard = () => {
         <div className="flex-1 flex overflow-hidden">
           {/* Enhanced Email List Panel */}
           <div className={`w-96 flex flex-col border-r transition-colors duration-300 ${
-            isDarkMode 
-              ? 'border-slate-600/40 bg-slate-900/40' 
+            isDarkMode
+              ? 'border-slate-600/40 bg-slate-900/40'
               : 'border-gray-200/60 bg-white/40'
           } backdrop-blur-sm`}>
             {/* Enhanced Header */}
@@ -810,7 +731,7 @@ const EmailDashboard = () => {
                 onAccountSelect={setSelectedAccount}
                 isDarkMode={isDarkMode}
               />
-              
+
               <div className="flex items-center justify-between">
                 <MailFolderDropdown
                   selectedFolder={selectedCategory}
@@ -824,14 +745,14 @@ const EmailDashboard = () => {
                   {filteredEmails.length} email{filteredEmails.length !== 1 ? 's' : ''}
                 </div>
               </div>
-              
-              <SearchCombobox 
+
+              <SearchCombobox
                 onSearch={handleSearch}
                 placeholder="Search emails, subjects, senders..."
                 isDarkMode={isDarkMode}
               />
-              
-              <FilterMenu 
+
+              <FilterMenu
                 onFilterChange={handleFilterChange}
                 activeFilters={activeFilters}
                 isDarkMode={isDarkMode}
@@ -869,8 +790,8 @@ const EmailDashboard = () => {
       </div>
 
       {/* Enhanced Modals */}
-      <AnalyticsModal 
-        isOpen={showAnalytics} 
+      <AnalyticsModal
+        isOpen={showAnalytics}
         onClose={() => setShowAnalytics(false)}
         isDarkMode={isDarkMode}
       />

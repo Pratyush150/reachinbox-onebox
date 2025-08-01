@@ -18,7 +18,13 @@ export async function initializeServices(): Promise<void> {
     imapService = new ImapService(aiService, notificationService);
 
     setImapService(imapService);
-    await imapService.syncAllAccounts();
+    
+    // FIXED: Force fresh sync on startup
+    if (process.env.NODE_ENV === 'development') {
+      await imapService.forceFreshSync();
+    } else {
+      await imapService.syncAllAccounts();
+    }
 
     logger.info('✅ All services initialized successfully');
   } catch (error: any) {

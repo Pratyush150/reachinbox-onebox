@@ -31,7 +31,6 @@ export class ImapService extends EventEmitter {
 
   async addAccount(accountData: any): Promise<IEmailAccount> {
     try {
-      // Check for existing account
       const existingAccount = await EmailAccount.findOne({ 
         email: accountData.email,
         isActive: true 
@@ -43,7 +42,6 @@ export class ImapService extends EventEmitter {
         return existingAccount;
       }
 
-      // Create new account
       const account = await EmailAccount.create({
         ...accountData,
         isActive: true,
@@ -57,10 +55,7 @@ export class ImapService extends EventEmitter {
       });
 
       logger.info(`Created new account: ${account.email}`);
-      
-      // Connect and start syncing
       await this.connectToAccount(account);
-      
       return account;
     } catch (error: any) {
       logger.error(`Failed to add account ${accountData.email}:`, error);
@@ -98,7 +93,6 @@ export class ImapService extends EventEmitter {
     const accountId = (account._id as any).toString();
     
     try {
-      // Close existing connection if any
       const existingConnection = this.connections.get(accountId);
       if (existingConnection) {
         existingConnection.imap.end();
@@ -126,7 +120,6 @@ export class ImapService extends EventEmitter {
 
       this.setupImapEventHandlers(connection, accountId);
       this.connections.set(accountId, connection);
-
       imap.connect();
 
       logger.info(`Connecting to IMAP for ${account.email}...`);
@@ -164,7 +157,7 @@ export class ImapService extends EventEmitter {
         this.scheduleReconnection(accountId, 30000 * connection.errorCount);
       } else {
         logger.error(`Too many errors for ${account.email}, giving up`);
-        await this.updateAccountStatus(account, 'failed');
+        await this.updateAccountStatus(account, 'error');
       }
     });
 
@@ -204,8 +197,8 @@ export class ImapService extends EventEmitter {
           return;
         }
 
-        // Sync recent emails (last 100 or all if less)
-        const limit = Math.min(totalMessages, 100);
+        // FIXED: Sync recent emails (last 150 or all if less)
+        const limit = Math.min(totalMessages, 150);
         const start = Math.max(1, totalMessages - limit + 1);
         
         logger.info(`Syncing ${limit} emails for ${account.email} (${start}:${totalMessages})`);
@@ -269,13 +262,11 @@ export class ImapService extends EventEmitter {
         const parsed = await simpleParser(buffer);
         const messageId = parsed.messageId || `${account._id}-${seqno}-${Date.now()}`;
         
-        // Check if email already exists
         const existingEmail = await Email.findOne({ messageId });
         if (existingEmail) {
           return;
         }
 
-        // Create email document
         const emailDoc: any = {
           accountId: (account._id as any).toString(),
           messageId,
@@ -299,13 +290,12 @@ export class ImapService extends EventEmitter {
           subject: parsed.subject || 'No subject',
           textBody: parsed.text || 'No text content',
           htmlBody: parsed.html || '',
-          folder: 'inbox', // FIXED: Changed from 'INBOX' to 'inbox' to match enum
+          folder: 'inbox', // FIXED: lowercase
           isRead: attributes?.flags?.includes('\\Seen') || false,
           receivedDate: parsed.date || new Date(),
           aiProcessed: false
         };
 
-        // Process attachments
         if (parsed.attachments && parsed.attachments.length > 0) {
           emailDoc.attachments = parsed.attachments.map((att: any) => ({
             filename: att.filename,
@@ -315,12 +305,10 @@ export class ImapService extends EventEmitter {
           }));
         }
 
-        // AI Classification
         try {
           const aiResult = await this.aiService.classifyEmail(emailDoc);
           emailDoc.aiCategory = aiResult.category;
           emailDoc.aiConfidence = aiResult.confidence;
-          
           emailDoc.aiProcessed = true;
         } catch (aiError) {
           logger.error('AI classification failed:', aiError);
@@ -329,18 +317,13 @@ export class ImapService extends EventEmitter {
           emailDoc.aiProcessed = false;
         }
 
-        // Save to database
         const savedEmail = await Email.create(emailDoc);
-
-        // Index in Elasticsearch
         await this.indexEmailInElasticsearch(savedEmail);
 
-        // Send notifications for important emails
         if (['interested', 'meeting_booked'].includes(emailDoc.aiCategory)) {
           await this.notificationService.processInterestedEmail(savedEmail);
         }
 
-        // Emit event
         this.emit('emailProcessed', savedEmail);
         
       } catch (error) {
@@ -359,7 +342,6 @@ export class ImapService extends EventEmitter {
           return;
         }
 
-        // Get recent unseen messages
         imap.search(['UNSEEN'], (searchErr: any, results: number[]) => {
           if (searchErr) {
             logger.error(`Search error for ${account.email}:`, searchErr);
@@ -477,7 +459,6 @@ export class ImapService extends EventEmitter {
       this.connections.forEach(async (connection, accountId) => {
         const timeSinceActivity = Date.now() - connection.lastActivity.getTime();
         
-        // Ping connection if inactive for 5 minutes
         if (timeSinceActivity > 5 * 60 * 1000 && connection.isConnected) {
           try {
             connection.imap.openBox('INBOX', true, (err: any) => {
@@ -492,7 +473,7 @@ export class ImapService extends EventEmitter {
           }
         }
       });
-    }, 60000); // Check every minute
+    }, 60000);
   }
 
   public getConnectionStatus(): { [accountId: string]: any } {
@@ -523,6 +504,27 @@ export class ImapService extends EventEmitter {
         logger.error(`Failed to sync account ${account.email}:`, error);
       }
     }
+  }
+
+  // FIXED: Force fresh sync on startup with proper account clearing
+  public async forceFreshSync(): Promise<void> {
+    logger.info('🔄 Starting fresh email sync...');
+    
+    // Clear existing emails AND accounts for truly fresh start
+    await Email.deleteMany({});
+    await EmailAccount.updateMany({}, { isActive: false }); // Deactivate existing accounts
+    logger.info('🗑️ Cleared existing emails and deactivated accounts for fresh sync');
+    
+    // Clear any existing IMAP connections
+    this.connections.forEach((connection) => {
+      connection.imap.end();
+    });
+    this.connections.clear();
+    
+    // Wait a moment then start fresh sync
+    setTimeout(async () => {
+      await this.syncAllAccounts();
+    }, 2000);
   }
 
   public async disconnect(): Promise<void> {

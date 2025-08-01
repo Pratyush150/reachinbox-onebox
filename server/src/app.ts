@@ -23,7 +23,12 @@ const PORT = Number(process.env.PORT) || 5001;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://65.1.63.189:3000',
+  origin: [
+    'http://65.1.63.189:3000',
+    'http://65.1.63.189:3001',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -42,14 +47,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// FIXED: Health check route (was missing)
+// Health check route
 app.get('/health', async (req, res) => {
   try {
-    // Check database connection
     const mongoose = require('mongoose');
     const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
     
-    // Check services
     const servicesStatus = {
       imap: 'active',
       ai: 'active',
@@ -85,7 +88,6 @@ app.get('/health', async (req, res) => {
 // API Routes
 const apiPrefix = process.env.API_PREFIX || '/api/v1';
 
-// Mount all route modules
 app.use(`${apiPrefix}/emails`, emailRoutes);
 app.use(`${apiPrefix}/ai`, aiRoutes);
 app.use(`${apiPrefix}/accounts`, accountRouter);
@@ -101,27 +103,13 @@ app.get(`${apiPrefix}/docs`, (req, res) => {
       emails: {
         'GET /emails': 'Get all emails with filtering and pagination',
         'GET /emails/:id': 'Get single email by ID',
-        'PUT /emails/:id': 'Update email properties',
-        'DELETE /emails/:id': 'Soft delete email',
         'PUT /emails/:id/read': 'Mark email as read',
         'PUT /emails/:id/unread': 'Mark email as unread',
         'PUT /emails/:id/star': 'Toggle star status',
         'PUT /emails/:id/archive': 'Archive email',
-        'PUT /emails/:id/restore': 'Restore from archive',
-        'PUT /emails/:id/move': 'Move to different folder',
         'POST /emails/bulk-actions': 'Perform bulk operations',
         'GET /emails/search': 'Advanced email search',
-        'POST /emails/compose': 'Compose and send email',
-        'POST /emails/:id/reply': 'Reply to email',
-        'GET /emails/drafts': 'Get all drafts',
-        'POST /emails/drafts': 'Save draft',
-        'PUT /emails/drafts/:id': 'Update draft',
-        'DELETE /emails/drafts/:id': 'Delete draft',
-        'GET /emails/analytics/overview': 'Email analytics overview',
-        'GET /emails/analytics/trends': 'Email trends data',
-        'GET /emails/stats': 'Email statistics by folder/category',
-        'GET /emails/sync/status': 'Get sync status for all accounts',
-        'POST /emails/sync/trigger': 'Trigger manual sync'
+        'GET /emails/stats': 'Email statistics by folder/category'
       },
       ai: {
         'POST /ai/classify': 'Classify email content using AI',
@@ -134,8 +122,6 @@ app.get(`${apiPrefix}/docs`, (req, res) => {
         'GET /accounts': 'Get all email accounts',
         'POST /accounts': 'Add new email account',
         'GET /accounts/:id': 'Get account by ID',
-        'PUT /accounts/:id': 'Update account',
-        'DELETE /accounts/:id': 'Remove account',
         'POST /accounts/:id/test-connection': 'Test account connection',
         'GET /accounts/:id/stats': 'Get account statistics'
       },
@@ -144,7 +130,6 @@ app.get(`${apiPrefix}/docs`, (req, res) => {
         'POST /test/setup-accounts': 'Setup test accounts',
         'POST /test/sample-emails': 'Generate sample emails',
         'POST /test/test-ai': 'Test AI classification',
-        'POST /test/test-notifications': 'Test notification services',
         'GET /test/sync-status': 'Monitor sync progress'
       }
     },
@@ -216,7 +201,6 @@ async function startServer() {
       logger.info(`❤️  Health Check: http://65.1.63.189:${PORT}/health`);
       logger.info(`🧪 Test APIs: http://65.1.63.189:${PORT}${apiPrefix}/test/health`);
       
-      // Log available endpoints for quick reference
       logger.info(`\n📋 Quick API Reference:`);
       logger.info(`   GET  ${apiPrefix}/emails - Get all emails`);
       logger.info(`   PUT  ${apiPrefix}/emails/:id/read - Mark as read`);
