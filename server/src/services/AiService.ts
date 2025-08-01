@@ -10,7 +10,7 @@ export class AiService {
       const apiKey = process.env.GEMINI_API_KEY;
       if (apiKey && apiKey !== 'your-gemini-api-key-here') {
         this.genAI = new GoogleGenerativeAI(apiKey);
-        this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
+        this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
         logger.info('✅ AI Service initialized with Gemini');
       } else {
         logger.warn('⚠️ AI Service initialized with rule-based classification (no Gemini API key)');

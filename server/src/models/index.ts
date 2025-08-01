@@ -591,7 +591,7 @@ const emailAccountSchema = new Schema({
   },
   syncStatus: {
     type: String,
-    enum: ['connecting', 'connected', 'syncing', 'error', 'disconnected'],
+    enum: ['pending', 'connecting', 'connected', 'syncing', 'error', 'disconnected'],
     default: 'connecting',
     index: true
   },

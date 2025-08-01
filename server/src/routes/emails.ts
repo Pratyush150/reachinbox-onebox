@@ -21,6 +21,170 @@ const bulkActionSchema = Joi.object({
   labels: Joi.array().items(Joi.string())
 });
 
+// CRITICAL: SPECIFIC ROUTES MUST COME BEFORE PARAMETERIZED ROUTES
+
+// GET /api/v1/emails/stats - FIXED: Moved before /:id
+router.get('/stats', asyncHandler(async (req: Request, res: Response) => {
+  const { accountId } = req.query;
+
+  const filter: any = { isDeleted: false };
+  if (accountId) filter.accountId = accountId;
+
+  const stats = await Email.aggregate([
+    { $match: filter },
+    {
+      $facet: {
+        folderCounts: [
+          { $group: { _id: '$folder', count: { $sum: 1 } } }
+        ],
+        categoryCounts: [
+          { $group: { _id: '$aiCategory', count: { $sum: 1 } } }
+        ],
+        statusCounts: [
+          {
+            $group: {
+              _id: null,
+              total: { $sum: 1 },
+              unread: { $sum: { $cond: [{ $eq: ['$isRead', false] }, 1, 0] } },
+              starred: { $sum: { $cond: [{ $eq: ['$isStarred', true] }, 1, 0] } },
+              archived: { $sum: { $cond: [{ $eq: ['$isArchived', true] }, 1, 0] } }
+            }
+          }
+        ]
+      }
+    }
+  ]);
+
+  const result = stats[0];
+  const folderCounts: any = {};
+  const categoryCounts: any = {};
+
+  result.folderCounts.forEach((item: any) => {
+    folderCounts[item._id] = item.count;
+  });
+
+  result.categoryCounts.forEach((item: any) => {
+    if (item._id) categoryCounts[item._id] = item.count;
+  });
+
+  const statusStats = result.statusCounts[0] || { total: 0, unread: 0, starred: 0, archived: 0 };
+
+  res.json({
+    success: true,
+    data: {
+      folders: folderCounts,
+      categories: categoryCounts,
+      status: statusStats,
+      lastUpdated: new Date()
+    }
+  });
+}));
+
+// GET /api/v1/emails/search - FIXED: Moved before /:id
+router.get('/search', asyncHandler(async (req: Request, res: Response) => {
+  const {
+    q,
+    from,
+    to,
+    subject,
+    body,
+    dateFrom,
+    dateTo,
+    hasAttachments,
+    aiCategory,
+    folder,
+    page = 1,
+    limit = 20
+  } = req.query;
+
+  const filter: any = { isDeleted: false };
+  
+  if (q) filter.$text = { $search: q as string };
+  if (from) filter['from.address'] = new RegExp(from as string, 'i');
+  if (to) filter['to.address'] = new RegExp(to as string, 'i');
+  if (subject) filter.subject = new RegExp(subject as string, 'i');
+  if (body) filter.textBody = new RegExp(body as string, 'i');
+  if (dateFrom || dateTo) {
+    filter.receivedDate = {};
+    if (dateFrom) filter.receivedDate.$gte = new Date(dateFrom as string);
+    if (dateTo) filter.receivedDate.$lte = new Date(dateTo as string);
+  }
+  if (hasAttachments === 'true') filter['attachments.0'] = { $exists: true };
+  if (aiCategory) filter.aiCategory = aiCategory;
+  if (folder) filter.folder = folder;
+
+  const emails = await Email
+    .find(filter)
+    .sort({ receivedDate: -1 })
+    .limit(Number(limit))
+    .skip((Number(page) - 1) * Number(limit))
+    .populate('accountId', 'email provider');
+
+  const total = await Email.countDocuments(filter);
+
+  res.json({
+    success: true,
+    data: {
+      emails,
+      searchQuery: { q, from, to, subject, body, dateFrom, dateTo, hasAttachments, aiCategory, folder },
+      pagination: {
+        page: Number(page),
+        limit: Number(limit),
+        total,
+        pages: Math.ceil(total / Number(limit))
+      }
+    }
+  });
+}));
+
+// POST /api/v1/emails/bulk-actions - FIXED: Moved before /:id
+router.post('/bulk-actions', asyncHandler(async (req: Request, res: Response) => {
+  const { error, value } = bulkActionSchema.validate(req.body);
+  if (error) {
+    res.status(400).json({
+      success: false,
+      error: error.details[0].message
+    });
+    return;
+  }
+
+  const { action, emailIds } = value;
+
+  let updateData: any = { lastActionAt: new Date() };
+  const actionEntry = { type: action, timestamp: new Date() };
+
+  switch (action) {
+    case 'markRead':
+      updateData.isRead = true;
+      break;
+    case 'markUnread':
+      updateData.isRead = false;
+      break;
+    case 'archive':
+      updateData.isArchived = true;
+      updateData.folder = 'archive';
+      break;
+    case 'delete':
+      updateData.isDeleted = true;
+      updateData.folder = 'deleted';
+      break;
+  }
+
+  const result = await Email.updateMany(
+    { _id: { $in: emailIds }, isDeleted: false },
+    { 
+      ...updateData,
+      $push: { actions: actionEntry }
+    }
+  );
+
+  res.json({
+    success: true,
+    message: `Bulk ${action} completed: ${result.modifiedCount}/${emailIds.length} emails processed`,
+    data: { modifiedCount: result.modifiedCount, totalCount: emailIds.length }
+  });
+}));
+
 // GET /api/v1/emails - Get all emails with filtering
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
   const {
@@ -90,6 +254,8 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     }
   });
 }));
+
+// PARAMETERIZED ROUTES MUST COME AFTER SPECIFIC ROUTES
 
 // GET /api/v1/emails/:id - Get single email
 router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
@@ -191,168 +357,6 @@ router.put('/:id/archive', asyncHandler(async (req: Request, res: Response) => {
   }
 
   res.json({ success: true, message: 'Email archived', data: email });
-}));
-
-// POST /api/v1/emails/bulk-actions - Bulk operations
-router.post('/bulk-actions', asyncHandler(async (req: Request, res: Response) => {
-  const { error, value } = bulkActionSchema.validate(req.body);
-  if (error) {
-    res.status(400).json({
-      success: false,
-      error: error.details[0].message
-    });
-    return;
-  }
-
-  const { action, emailIds } = value;
-
-  let updateData: any = { lastActionAt: new Date() };
-  const actionEntry = { type: action, timestamp: new Date() };
-
-  switch (action) {
-    case 'markRead':
-      updateData.isRead = true;
-      break;
-    case 'markUnread':
-      updateData.isRead = false;
-      break;
-    case 'archive':
-      updateData.isArchived = true;
-      updateData.folder = 'archive';
-      break;
-    case 'delete':
-      updateData.isDeleted = true;
-      updateData.folder = 'deleted';
-      break;
-  }
-
-  const result = await Email.updateMany(
-    { _id: { $in: emailIds }, isDeleted: false },
-    { 
-      ...updateData,
-      $push: { actions: actionEntry }
-    }
-  );
-
-  res.json({
-    success: true,
-    message: `Bulk ${action} completed: ${result.modifiedCount}/${emailIds.length} emails processed`,
-    data: { modifiedCount: result.modifiedCount, totalCount: emailIds.length }
-  });
-}));
-
-// GET /api/v1/emails/search - Advanced search
-router.get('/search', asyncHandler(async (req: Request, res: Response) => {
-  const {
-    q,
-    from,
-    to,
-    subject,
-    body,
-    dateFrom,
-    dateTo,
-    hasAttachments,
-    aiCategory,
-    folder,
-    page = 1,
-    limit = 20
-  } = req.query;
-
-  const filter: any = { isDeleted: false };
-  
-  if (q) filter.$text = { $search: q as string };
-  if (from) filter['from.address'] = new RegExp(from as string, 'i');
-  if (to) filter['to.address'] = new RegExp(to as string, 'i');
-  if (subject) filter.subject = new RegExp(subject as string, 'i');
-  if (body) filter.textBody = new RegExp(body as string, 'i');
-  if (dateFrom || dateTo) {
-    filter.receivedDate = {};
-    if (dateFrom) filter.receivedDate.$gte = new Date(dateFrom as string);
-    if (dateTo) filter.receivedDate.$lte = new Date(dateTo as string);
-  }
-  if (hasAttachments === 'true') filter['attachments.0'] = { $exists: true };
-  if (aiCategory) filter.aiCategory = aiCategory;
-  if (folder) filter.folder = folder;
-
-  const emails = await Email
-    .find(filter)
-    .sort({ receivedDate: -1 })
-    .limit(Number(limit))
-    .skip((Number(page) - 1) * Number(limit))
-    .populate('accountId', 'email provider');
-
-  const total = await Email.countDocuments(filter);
-
-  res.json({
-    success: true,
-    data: {
-      emails,
-      searchQuery: { q, from, to, subject, body, dateFrom, dateTo, hasAttachments, aiCategory, folder },
-      pagination: {
-        page: Number(page),
-        limit: Number(limit),
-        total,
-        pages: Math.ceil(total / Number(limit))
-      }
-    }
-  });
-}));
-
-// GET /api/v1/emails/stats - Get email statistics
-router.get('/stats', asyncHandler(async (req: Request, res: Response) => {
-  const { accountId } = req.query;
-
-  const filter: any = { isDeleted: false };
-  if (accountId) filter.accountId = accountId;
-
-  const stats = await Email.aggregate([
-    { $match: filter },
-    {
-      $facet: {
-        folderCounts: [
-          { $group: { _id: '$folder', count: { $sum: 1 } } }
-        ],
-        categoryCounts: [
-          { $group: { _id: '$aiCategory', count: { $sum: 1 } } }
-        ],
-        statusCounts: [
-          {
-            $group: {
-              _id: null,
-              total: { $sum: 1 },
-              unread: { $sum: { $cond: [{ $eq: ['$isRead', false] }, 1, 0] } },
-              starred: { $sum: { $cond: [{ $eq: ['$isStarred', true] }, 1, 0] } },
-              archived: { $sum: { $cond: [{ $eq: ['$isArchived', true] }, 1, 0] } }
-            }
-          }
-        ]
-      }
-    }
-  ]);
-
-  const result = stats[0];
-  const folderCounts: any = {};
-  const categoryCounts: any = {};
-
-  result.folderCounts.forEach((item: any) => {
-    folderCounts[item._id] = item.count;
-  });
-
-  result.categoryCounts.forEach((item: any) => {
-    if (item._id) categoryCounts[item._id] = item.count;
-  });
-
-  const statusStats = result.statusCounts[0] || { total: 0, unread: 0, starred: 0, archived: 0 };
-
-  res.json({
-    success: true,
-    data: {
-      folders: folderCounts,
-      categories: categoryCounts,
-      status: statusStats,
-      lastUpdated: new Date()
-    }
-  });
 }));
 
 export default router;

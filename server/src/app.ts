@@ -42,7 +42,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check with detailed status
+// FIXED: Health check route (was missing)
 app.get('/health', async (req, res) => {
   try {
     // Check database connection

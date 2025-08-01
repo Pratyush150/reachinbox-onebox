@@ -1,49 +1,48 @@
-import { logger } from '../utils/logger';
 import { ImapService } from './ImapService';
 import { AiService } from './AiService';
 import { NotificationService } from './NotificationService';
 import { setImapService } from '../routes/accounts';
+import { logger } from '../utils/logger';
 
-let imapService: ImapService;
-let aiService: AiService;
-let notificationService: NotificationService;
+export let imapService: ImapService;
+export let aiService: AiService;
+export let notificationService: NotificationService;
 
 export async function initializeServices(): Promise<void> {
   try {
-    // Initialize services
-    notificationService = new NotificationService();
+    logger.info('Initializing services...');
+
     aiService = new AiService();
-    imapService = new ImapService();
-    
-    // Set up service dependencies
-    setImapService(imapService);
-    
-    // Initialize all services
-    await imapService.initialize();
     await aiService.initialize();
-    
-    logger.info('🎉 All services initialized successfully');
-  } catch (error) {
-    logger.error('Failed to initialize services:', error);
+    notificationService = new NotificationService();
+    imapService = new ImapService(aiService, notificationService);
+
+    setImapService(imapService);
+    await imapService.syncAllAccounts();
+
+    logger.info('✅ All services initialized successfully');
+  } catch (error: any) {
+    logger.error('❌ Failed to initialize services:', error);
     throw error;
   }
 }
 
-export { imapService, aiService, notificationService };
-
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  logger.info('Received SIGTERM, shutting down gracefully...');
-  if (imapService) {
-    await imapService.shutdown();
+export async function shutdownServices(): Promise<void> {
+  try {
+    logger.info('Shutting down services...');
+    if (imapService) {
+      await imapService.disconnect();
+    }
+    logger.info('✅ Services shutdown completed');
+  } catch (error: any) {
+    logger.error('❌ Error during service shutdown:', error);
   }
-  process.exit(0);
+}
+
+process.on('SIGTERM', async () => {
+  await shutdownServices();
 });
 
 process.on('SIGINT', async () => {
-  logger.info('Received SIGINT, shutting down gracefully...');
-  if (imapService) {
-    await imapService.shutdown();
-  }
-  process.exit(0);
+  await shutdownServices();
 });

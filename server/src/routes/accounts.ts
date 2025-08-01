@@ -25,6 +25,77 @@ const addAccountSchema = Joi.object({
   }).required()
 });
 
+// CRITICAL: SPECIFIC ROUTES MUST COME BEFORE PARAMETERIZED ROUTES
+
+// GET /api/v1/accounts/providers - FIXED: Moved before /:id
+router.get('/providers', (req: Request, res: Response) => {
+  const providerConfigs = {
+    gmail: {
+      host: 'imap.gmail.com',
+      port: 993,
+      secure: true
+    },
+    outlook: {
+      host: 'outlook.office365.com',
+      port: 993,
+      secure: true
+    },
+    yahoo: {
+      host: 'imap.mail.yahoo.com',
+      port: 993,
+      secure: true
+    }
+  };
+
+  res.json({
+    success: true,
+    data: Object.keys(providerConfigs).map(provider => ({
+      name: provider,
+      displayName: provider.charAt(0).toUpperCase() + provider.slice(1),
+      ...providerConfigs[provider as keyof typeof providerConfigs]
+    }))
+  });
+});
+
+// GET /api/v1/accounts/providers/:provider/config - FIXED: Moved before /:id
+router.get('/providers/:provider/config', (req: Request, res: Response) => {
+  const { provider } = req.params;
+  
+  const providerConfigs = {
+    gmail: {
+      host: 'imap.gmail.com',
+      port: 993,
+      secure: true
+    },
+    outlook: {
+      host: 'outlook.office365.com',
+      port: 993,
+      secure: true
+    },
+    yahoo: {
+      host: 'imap.mail.yahoo.com',
+      port: 993,
+      secure: true
+    }
+  };
+
+  const config = providerConfigs[provider as keyof typeof providerConfigs];
+  
+  if (!config) {
+    res.status(404).json({
+      success: false,
+      error: 'Provider configuration not found'
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: config
+  });
+});
+
+// GET /api/v1/accounts - Get all accounts
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
   const { userId } = req.query;
   
@@ -46,6 +117,9 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
+// PARAMETERIZED ROUTES MUST COME AFTER SPECIFIC ROUTES
+
+// GET /api/v1/accounts/:id - Get account by ID
 router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   const account = await EmailAccount.findById(req.params.id).select('-imapConfig.pass');
   
@@ -66,6 +140,7 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   res.json({ success: true, data: accountWithStatus });
 }));
 
+// POST /api/v1/accounts - Add new account
 router.post('/', asyncHandler(async (req: Request, res: Response) => {
   const { error, value } = addAccountSchema.validate(req.body);
   if (error) {
@@ -117,6 +192,7 @@ router.post('/', asyncHandler(async (req: Request, res: Response) => {
   }
 }));
 
+// PUT /api/v1/accounts/:id - Update account
 router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
   const updateData = req.body;
@@ -145,6 +221,7 @@ router.put('/:id', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
+// DELETE /api/v1/accounts/:id - Remove account
 router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -172,6 +249,7 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
   }
 }));
 
+// POST /api/v1/accounts/:id/test-connection - Test connection
 router.post('/:id/test-connection', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -200,6 +278,7 @@ router.post('/:id/test-connection', asyncHandler(async (req: Request, res: Respo
   }
 }));
 
+// GET /api/v1/accounts/:id/stats - Get account statistics
 router.get('/:id/stats', asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -269,53 +348,5 @@ router.get('/:id/stats', asyncHandler(async (req: Request, res: Response) => {
     data: stats
   });
 }));
-
-const providerConfigs = {
-  gmail: {
-    host: 'imap.gmail.com',
-    port: 993,
-    secure: true
-  },
-  outlook: {
-    host: 'outlook.office365.com',
-    port: 993,
-    secure: true
-  },
-  yahoo: {
-    host: 'imap.mail.yahoo.com',
-    port: 993,
-    secure: true
-  }
-};
-
-router.get('/providers/:provider/config', (req: Request, res: Response) => {
-  const { provider } = req.params;
-  
-  const config = providerConfigs[provider as keyof typeof providerConfigs];
-  
-  if (!config) {
-    res.status(404).json({
-      success: false,
-      error: 'Provider configuration not found'
-    });
-    return;
-  }
-
-  res.json({
-    success: true,
-    data: config
-  });
-});
-
-router.get('/providers', (req: Request, res: Response) => {
-  res.json({
-    success: true,
-    data: Object.keys(providerConfigs).map(provider => ({
-      name: provider,
-      displayName: provider.charAt(0).toUpperCase() + provider.slice(1),
-      ...providerConfigs[provider as keyof typeof providerConfigs]
-    }))
-  });
-});
 
 export const accountRouter = router;

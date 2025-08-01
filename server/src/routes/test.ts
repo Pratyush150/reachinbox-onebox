@@ -172,7 +172,7 @@ router.post('/setup-accounts', asyncHandler(async (req: Request, res: Response) 
   }
 }));
 
-// Generate sample emails for testing (5 categories)
+// Generate sample emails for testing (5 categories) - FIXED folder enum issue
 router.post('/sample-emails', asyncHandler(async (req: Request, res: Response) => {
   const { count = 10 } = req.body;
   
@@ -260,7 +260,7 @@ router.post('/sample-emails', asyncHandler(async (req: Request, res: Response) =
       to: [{ address: account.email }],
       subject: sample.subject,
       textBody: sample.body,
-      folder: 'INBOX',
+      folder: 'inbox', // FIXED: Changed from 'INBOX' to 'inbox' to match enum
       isRead: Math.random() > 0.7,
       receivedDate: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000),
       aiProcessed: true,

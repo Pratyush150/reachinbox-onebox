@@ -1,72 +1,70 @@
 import Imap from 'imap';
-import { simpleParser, ParsedMail } from 'mailparser';
+import { simpleParser } from 'mailparser';
 import { EventEmitter } from 'events';
 import { Email, EmailAccount, IEmailAccount } from '../models';
-import { elasticClient } from '../config/elasticsearch';
-import { logger } from '../utils/logger';
 import { AiService } from './AiService';
 import { NotificationService } from './NotificationService';
+import { elasticClient } from '../config/elasticsearch';
+import { logger } from '../utils/logger';
 
 interface ImapConnection {
   imap: Imap;
   account: IEmailAccount;
-  reconnectAttempts: number;
   isConnected: boolean;
+  lastActivity: Date;
+  errorCount: number;
 }
 
 export class ImapService extends EventEmitter {
   private connections: Map<string, ImapConnection> = new Map();
+  private reconnectTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private aiService: AiService;
   private notificationService: NotificationService;
-  private readonly maxReconnectAttempts = 5;
-  private readonly baseRetryDelay = 1000;
+  private syncProgress: Map<string, { processed: number; total: number }> = new Map();
 
-  constructor() {
+  constructor(aiService: AiService, notificationService: NotificationService) {
     super();
-    this.aiService = new AiService();
-    this.notificationService = new NotificationService();
-  }
-
-  async initialize(): Promise<void> {
-    try {
-      const accounts = await EmailAccount.find({ isActive: true });
-      
-      for (const account of accounts) {
-        await this.connectAccount(account);
-      }
-      
-      logger.info(`✅ IMAP Service initialized with ${accounts.length} accounts`);
-    } catch (error) {
-      logger.error('Failed to initialize IMAP Service:', error);
-      throw error;
-    }
+    this.aiService = aiService;
+    this.notificationService = notificationService;
+    this.startConnectionMonitor();
   }
 
   async addAccount(accountData: any): Promise<IEmailAccount> {
     try {
-      const account = new EmailAccount({
-        userId: accountData.userId,
+      // Check for existing account
+      const existingAccount = await EmailAccount.findOne({ 
         email: accountData.email,
-        provider: accountData.provider,
-        imapConfig: {
-          host: accountData.imapConfig.host,
-          port: accountData.imapConfig.port,
-          secure: accountData.imapConfig.secure,
-          user: accountData.imapConfig.user,
-          pass: this.encryptPassword(accountData.imapConfig.pass)
-        },
-        isActive: true,
-        syncStatus: 'connecting'
+        isActive: true 
       });
 
-      await account.save();
-      await this.connectAccount(account);
+      if (existingAccount) {
+        logger.info(`Account ${accountData.email} already exists, updating connection`);
+        await this.connectToAccount(existingAccount);
+        return existingAccount;
+      }
+
+      // Create new account
+      const account = await EmailAccount.create({
+        ...accountData,
+        isActive: true,
+        syncStatus: 'pending',
+        syncStats: {
+          totalEmails: 0,
+          processedEmails: 0,
+          lastSyncAt: null,
+          errors: []
+        }
+      });
+
+      logger.info(`Created new account: ${account.email}`);
       
-      logger.info(`📧 Added email account: ${account.email}`);
+      // Connect and start syncing
+      await this.connectToAccount(account);
+      
       return account;
-    } catch (error) {
-      logger.error('Failed to add account:', error);
-      throw error;
+    } catch (error: any) {
+      logger.error(`Failed to add account ${accountData.email}:`, error);
+      throw new Error(`Failed to add email account: ${error.message}`);
     }
   }
 
@@ -78,157 +76,177 @@ export class ImapService extends EventEmitter {
         this.connections.delete(accountId);
       }
 
+      const timeout = this.reconnectTimeouts.get(accountId);
+      if (timeout) {
+        clearTimeout(timeout);
+        this.reconnectTimeouts.delete(accountId);
+      }
+
       await EmailAccount.findByIdAndUpdate(accountId, { 
-        isActive: false, 
-        syncStatus: 'disconnected' 
+        isActive: false,
+        syncStatus: 'disconnected'
       });
-      
-      logger.info(`🗑️ Removed email account: ${accountId}`);
-    } catch (error) {
-      logger.error('Failed to remove account:', error);
+
+      logger.info(`Removed account: ${accountId}`);
+    } catch (error: any) {
+      logger.error(`Failed to remove account ${accountId}:`, error);
       throw error;
     }
   }
 
-  private async connectAccount(account: IEmailAccount): Promise<void> {
+  async connectToAccount(account: IEmailAccount): Promise<void> {
+    const accountId = (account._id as any).toString();
+    
     try {
-      const imapConfig = {
+      // Close existing connection if any
+      const existingConnection = this.connections.get(accountId);
+      if (existingConnection) {
+        existingConnection.imap.end();
+      }
+
+      const imap = new Imap({
         user: account.imapConfig.user,
-        password: this.decryptPassword(account.imapConfig.pass),
+        password: account.imapConfig.pass,
         host: account.imapConfig.host,
         port: account.imapConfig.port,
         tls: account.imapConfig.secure,
-        autotls: 'always' as const,
-        tlsOptions: {
-          rejectUnauthorized: false
-        }
-      };
+        tlsOptions: { rejectUnauthorized: false },
+        connTimeout: 60000,
+        authTimeout: 30000,
+        keepalive: true
+      });
 
-      const imap = new Imap(imapConfig);
       const connection: ImapConnection = {
         imap,
         account,
-        reconnectAttempts: 0,
-        isConnected: false
+        isConnected: false,
+        lastActivity: new Date(),
+        errorCount: 0
       };
 
-      this.setupImapEventHandlers(connection);
-      this.connections.set((account._id as any).toString(), connection);
+      this.setupImapEventHandlers(connection, accountId);
+      this.connections.set(accountId, connection);
+
       imap.connect();
-      
-    } catch (error) {
-      logger.error(`Failed to connect account ${account.email}:`, error);
-      await this.updateAccountStatus((account._id as any).toString(), 'error');
+
+      logger.info(`Connecting to IMAP for ${account.email}...`);
+    } catch (error: any) {
+      logger.error(`Failed to connect to ${account.email}:`, error);
+      await this.updateAccountStatus(account, 'error', error.message);
       throw error;
     }
   }
 
-  private setupImapEventHandlers(connection: ImapConnection): void {
+  private setupImapEventHandlers(connection: ImapConnection, accountId: string): void {
     const { imap, account } = connection;
-    const accountId = (account._id as any).toString();
 
     imap.once('ready', async () => {
       try {
         connection.isConnected = true;
-        connection.reconnectAttempts = 0;
+        connection.errorCount = 0;
+        logger.info(`IMAP connection ready for ${account.email}`);
         
-        await this.updateAccountStatus(accountId, 'connected');
-        logger.info(`🔗 Connected to ${account.email}`);
-
-        await this.syncRecentEmails(connection);
-        await this.setupIdleConnection(connection);
-        
-      } catch (error) {
-        logger.error(`Error in ready handler for ${account.email}:`, error);
+        await this.updateAccountStatus(account, 'connected');
+        await this.syncEmails(connection);
+      } catch (error: any) {
+        logger.error(`Error during initial sync for ${account.email}:`, error);
+        await this.updateAccountStatus(account, 'error', error.message);
       }
     });
 
-    imap.once('error', async (error: Error) => {
+    imap.once('error', async (error: any) => {
+      connection.errorCount++;
       logger.error(`IMAP error for ${account.email}:`, error);
-      connection.isConnected = false;
-      await this.updateAccountStatus(accountId, 'error');
-      await this.handleReconnection(connection);
+      
+      await this.updateAccountStatus(account, 'error', error.message);
+      
+      if (connection.errorCount < 3) {
+        this.scheduleReconnection(accountId, 30000 * connection.errorCount);
+      } else {
+        logger.error(`Too many errors for ${account.email}, giving up`);
+        await this.updateAccountStatus(account, 'failed');
+      }
     });
 
     imap.once('end', async () => {
-      logger.warn(`IMAP connection ended for ${account.email}`);
       connection.isConnected = false;
-      await this.updateAccountStatus(accountId, 'disconnected');
-      await this.handleReconnection(connection);
+      logger.info(`IMAP connection ended for ${account.email}`);
+      
+      if (account.syncStatus !== 'error') {
+        this.scheduleReconnection(accountId, 10000);
+      }
+    });
+
+    imap.on('mail', async (numNewMsgs: number) => {
+      logger.info(`${numNewMsgs} new emails for ${account.email}`);
+      await this.syncNewEmails(connection);
     });
   }
 
-  private async syncRecentEmails(connection: ImapConnection): Promise<void> {
+  private async syncEmails(connection: ImapConnection): Promise<void> {
     const { imap, account } = connection;
-    
-    return new Promise((resolve, reject) => {
-      imap.openBox('INBOX', true, async (err, box) => {
+    const accountId = (account._id as any).toString();
+
+    try {
+      await this.updateAccountStatus(account, 'syncing');
+
+      imap.openBox('INBOX', true, async (err: any, box: any) => {
         if (err) {
           logger.error(`Failed to open INBOX for ${account.email}:`, err);
-          return reject(err);
+          await this.updateAccountStatus(account, 'error', err.message);
+          return;
         }
 
-        try {
-          // Get all emails - simpler and more reliable
-          const searchCriteria = ['ALL'];
-          
-          imap.search(searchCriteria, (searchErr, results) => {
-            if (searchErr) {
-              logger.error(`Search error for ${account.email}:`, searchErr);
-              return reject(searchErr);
-            }
-
-            if (!results || results.length === 0) {
-              logger.info(`No recent emails found for ${account.email}`);
-              return resolve();
-            }
-
-            logger.info(`📬 Found ${results.length} recent emails for ${account.email}`);
-            this.processEmailBatch(connection, results, resolve, reject);
-          });
-        } catch (error) {
-          reject(error);
+        const totalMessages = box.messages.total;
+        if (totalMessages === 0) {
+          logger.info(`No messages in INBOX for ${account.email}`);
+          await this.updateAccountStatus(account, 'completed');
+          return;
         }
-      });
-    });
-  }
 
-  private async processEmailBatch(
-    connection: ImapConnection, 
-    messageIds: number[], 
-    resolve: Function, 
-    reject: Function
-  ): Promise<void> {
-    const { imap, account } = connection;
-    const batchSize = 50;
-    let processed = 0;
-
-    for (let i = 0; i < messageIds.length; i += batchSize) {
-      const batch = messageIds.slice(i, i + batchSize);
-      
-      const fetch = imap.fetch(batch, {
-        bodies: '',
-        struct: true,
-        envelope: true
-      });
-
-      fetch.on('message', (msg, seqno) => {
-        this.processMessage(msg, account, seqno);
-      });
-
-      fetch.once('error', (err) => {
-        logger.error(`Fetch error for ${account.email}:`, err);
-        reject(err);
-      });
-
-      fetch.once('end', () => {
-        processed += batch.length;
-        logger.info(`📨 Processed ${processed}/${messageIds.length} emails for ${account.email}`);
+        // Sync recent emails (last 100 or all if less)
+        const limit = Math.min(totalMessages, 100);
+        const start = Math.max(1, totalMessages - limit + 1);
         
-        if (processed >= messageIds.length) {
-          resolve();
-        }
+        logger.info(`Syncing ${limit} emails for ${account.email} (${start}:${totalMessages})`);
+        
+        this.syncProgress.set(accountId, { processed: 0, total: limit });
+
+        const fetch = imap.fetch(`${start}:${totalMessages}`, {
+          bodies: '',
+          struct: true,
+          envelope: true
+        });
+
+        let processed = 0;
+
+        fetch.on('message', (msg: any, seqno: number) => {
+          this.processMessage(msg, account, seqno).then(() => {
+            processed++;
+            this.syncProgress.set(accountId, { processed, total: limit });
+            
+            if (processed === limit) {
+              logger.info(`Completed syncing ${processed} emails for ${account.email}`);
+              this.updateAccountSyncStats(account, processed, 0);
+              this.updateAccountStatus(account, 'completed');
+            }
+          }).catch((error) => {
+            logger.error(`Error processing message ${seqno} for ${account.email}:`, error);
+          });
+        });
+
+        fetch.once('error', async (error: any) => {
+          logger.error(`Fetch error for ${account.email}:`, error);
+          await this.updateAccountStatus(account, 'error', error.message);
+        });
+
+        fetch.once('end', () => {
+          logger.info(`Fetch completed for ${account.email}`);
+        });
       });
+    } catch (error: any) {
+      logger.error(`Sync error for ${account.email}:`, error);
+      await this.updateAccountStatus(account, 'error', error.message);
     }
   }
 
@@ -251,11 +269,13 @@ export class ImapService extends EventEmitter {
         const parsed = await simpleParser(buffer);
         const messageId = parsed.messageId || `${account._id}-${seqno}-${Date.now()}`;
         
+        // Check if email already exists
         const existingEmail = await Email.findOne({ messageId });
         if (existingEmail) {
           return;
         }
 
+        // Create email document
         const emailDoc: any = {
           accountId: (account._id as any).toString(),
           messageId,
@@ -279,24 +299,48 @@ export class ImapService extends EventEmitter {
           subject: parsed.subject || 'No subject',
           textBody: parsed.text || 'No text content',
           htmlBody: parsed.html || '',
-          folder: 'inbox', // FIXED: lowercase to match enum
+          folder: 'inbox', // FIXED: Changed from 'INBOX' to 'inbox' to match enum
           isRead: attributes?.flags?.includes('\\Seen') || false,
           receivedDate: parsed.date || new Date(),
           aiProcessed: false
         };
 
-        const aiResult = await this.aiService.classifyEmail(emailDoc);
-        emailDoc.aiCategory = aiResult.category;
-        emailDoc.aiConfidence = aiResult.confidence;
-        emailDoc.aiProcessed = true;
+        // Process attachments
+        if (parsed.attachments && parsed.attachments.length > 0) {
+          emailDoc.attachments = parsed.attachments.map((att: any) => ({
+            filename: att.filename,
+            contentType: att.contentType,
+            size: att.size,
+            contentId: att.cid
+          }));
+        }
 
+        // AI Classification
+        try {
+          const aiResult = await this.aiService.classifyEmail(emailDoc);
+          emailDoc.aiCategory = aiResult.category;
+          emailDoc.aiConfidence = aiResult.confidence;
+          
+          emailDoc.aiProcessed = true;
+        } catch (aiError) {
+          logger.error('AI classification failed:', aiError);
+          emailDoc.aiCategory = 'uncategorized';
+          emailDoc.aiConfidence = 0;
+          emailDoc.aiProcessed = false;
+        }
+
+        // Save to database
         const savedEmail = await Email.create(emailDoc);
+
+        // Index in Elasticsearch
         await this.indexEmailInElasticsearch(savedEmail);
 
-        if (['interested', 'meeting_booked'].includes(aiResult.category)) {
+        // Send notifications for important emails
+        if (['interested', 'meeting_booked'].includes(emailDoc.aiCategory)) {
           await this.notificationService.processInterestedEmail(savedEmail);
         }
 
+        // Emit event
         this.emit('emailProcessed', savedEmail);
         
       } catch (error) {
@@ -305,88 +349,53 @@ export class ImapService extends EventEmitter {
     });
   }
 
-  private async setupIdleConnection(connection: ImapConnection): Promise<void> {
+  private async syncNewEmails(connection: ImapConnection): Promise<void> {
     const { imap, account } = connection;
 
-    imap.openBox('INBOX', false, (err) => {
-      if (err) {
-        logger.error(`Failed to open INBOX for IDLE on ${account.email}:`, err);
-        return;
-      }
-
-      // Set up mail event listener for new emails
-      imap.on('mail', async (numNewMsgs: number) => {
-        logger.info(`📬 ${numNewMsgs} new email(s) received for ${account.email}`);
-        
-        // Fetch only the newest messages
-        const fetch = imap.fetch(`${Math.max(1, (imap as any).state.box.messages.total - numNewMsgs + 1)}:*`, {
-          bodies: '',
-          struct: true,
-          envelope: true
-        });
-
-        fetch.on('message', (msg, seqno) => {
-          this.processMessage(msg, account, seqno);
-        });
-      });
-
-      // Try IDLE, fallback to polling
-      try {
-        if (typeof (imap as any).idle === 'function') {
-          (imap as any).idle();
-          logger.info(`⏰ IDLE mode activated for ${account.email}`);
-        } else {
-          // Fallback: Check for new mail every 30 seconds
-          this.setupPollingMode(connection);
+    try {
+      imap.openBox('INBOX', true, (err: any, box: any) => {
+        if (err) {
+          logger.error(`Failed to open INBOX for new emails ${account.email}:`, err);
+          return;
         }
-      } catch (error) {
-        logger.warn(`IDLE failed for ${account.email}, switching to polling`);
-        this.setupPollingMode(connection);
-      }
-    });
-  }
 
-  private setupPollingMode(connection: ImapConnection): void {
-    const { imap, account } = connection;
-    let lastCount = 0;
-    
-    const pollInterval = setInterval(() => {
-      if (!connection.isConnected) {
-        clearInterval(pollInterval);
-        return;
-      }
+        // Get recent unseen messages
+        imap.search(['UNSEEN'], (searchErr: any, results: number[]) => {
+          if (searchErr) {
+            logger.error(`Search error for ${account.email}:`, searchErr);
+            return;
+          }
 
-      imap.openBox('INBOX', true, (err, box) => {
-        if (err) return;
-        
-        const currentCount = box.messages.total;
-        if (currentCount > lastCount) {
-          const newMsgs = currentCount - lastCount;
-          logger.info(`📬 ${newMsgs} new email(s) detected for ${account.email} (polling)`);
-          
-          // Fetch new messages
-          const fetch = imap.fetch(`${lastCount + 1}:${currentCount}`, {
+          if (!results || results.length === 0) {
+            logger.info(`No new unseen emails for ${account.email}`);
+            return;
+          }
+
+          logger.info(`Processing ${results.length} new emails for ${account.email}`);
+
+          const fetch = imap.fetch(results, {
             bodies: '',
             struct: true,
             envelope: true
           });
 
-          fetch.on('message', (msg, seqno) => {
-            this.processMessage(msg, account, seqno);
+          fetch.on('message', (msg: any, seqno: number) => {
+            this.processMessage(msg, account, seqno).catch((error) => {
+              logger.error(`Error processing new message ${seqno}:`, error);
+            });
           });
-        }
-        lastCount = currentCount;
+        });
       });
-    }, 30000); // Poll every 30 seconds
-
-    logger.info(`🔄 Polling mode activated for ${account.email} (30s intervals)`);
+    } catch (error: any) {
+      logger.error(`Error syncing new emails for ${account.email}:`, error);
+    }
   }
 
   private async indexEmailInElasticsearch(email: any): Promise<void> {
     try {
       await elasticClient.index({
         index: 'emails',
-        id: email._id.toString(),
+        id: (email._id as any).toString(),
         body: {
           messageId: email.messageId,
           accountId: email.accountId,
@@ -396,75 +405,137 @@ export class ImapService extends EventEmitter {
           body: email.textBody,
           folder: email.folder,
           aiCategory: email.aiCategory,
-          receivedDate: email.receivedDate
+          aiConfidence: email.aiConfidence,
+          receivedDate: email.receivedDate,
+          isRead: email.isRead,
+          isStarred: email.isStarred,
+          isArchived: email.isArchived
         }
       });
     } catch (error) {
-      logger.error('Failed to index email in Elasticsearch:', error);
+      logger.warn(`Failed to index email in Elasticsearch:`, error);
     }
   }
 
-  private async handleReconnection(connection: ImapConnection): Promise<void> {
-    const { account } = connection;
-    
-    if (connection.reconnectAttempts >= this.maxReconnectAttempts) {
-      logger.error(`Max reconnection attempts reached for ${account.email}`);
-      await this.updateAccountStatus((account._id as any).toString(), 'error');
-      return;
+  private async updateAccountStatus(account: IEmailAccount, status: string, error?: string): Promise<void> {
+    try {
+      const updateData: any = { 
+        syncStatus: status,
+        lastSyncAt: new Date()
+      };
+
+      if (error) {
+        updateData.$push = {
+          'syncStats.errors': {
+            message: error,
+            timestamp: new Date()
+          }
+        };
+      }
+
+      await EmailAccount.findByIdAndUpdate(account._id, updateData);
+    } catch (updateError) {
+      logger.error('Failed to update account status:', updateError);
+    }
+  }
+
+  private async updateAccountSyncStats(account: IEmailAccount, processed: number, errors: number): Promise<void> {
+    try {
+      await EmailAccount.findByIdAndUpdate(account._id, {
+        'syncStats.processedEmails': processed,
+        'syncStats.totalEmails': processed,
+        'syncStats.lastSyncAt': new Date()
+      });
+    } catch (error) {
+      logger.error('Failed to update sync stats:', error);
+    }
+  }
+
+  private scheduleReconnection(accountId: string, delay: number): void {
+    const existingTimeout = this.reconnectTimeouts.get(accountId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
     }
 
-    connection.reconnectAttempts++;
-    const delay = this.baseRetryDelay * Math.pow(2, connection.reconnectAttempts - 1);
-    
-    logger.info(`Reconnecting to ${account.email} in ${delay}ms (attempt ${connection.reconnectAttempts})`);
-    
-    setTimeout(async () => {
+    const timeout = setTimeout(async () => {
       try {
-        await this.connectAccount(account);
+        const account = await EmailAccount.findById(accountId);
+        if (account && account.isActive) {
+          logger.info(`Reconnecting to ${account.email}...`);
+          await this.connectToAccount(account);
+        }
       } catch (error) {
-        logger.error(`Reconnection failed for ${account.email}:`, error);
+        logger.error(`Reconnection failed for ${accountId}:`, error);
       }
     }, delay);
+
+    this.reconnectTimeouts.set(accountId, timeout);
   }
 
-  private async updateAccountStatus(accountId: string, status: string): Promise<void> {
-    try {
-      await EmailAccount.findByIdAndUpdate(accountId, { syncStatus: status });
-    } catch (error) {
-      logger.error('Failed to update account status:', error);
-    }
+  private startConnectionMonitor(): void {
+    setInterval(() => {
+      this.connections.forEach(async (connection, accountId) => {
+        const timeSinceActivity = Date.now() - connection.lastActivity.getTime();
+        
+        // Ping connection if inactive for 5 minutes
+        if (timeSinceActivity > 5 * 60 * 1000 && connection.isConnected) {
+          try {
+            connection.imap.openBox('INBOX', true, (err: any) => {
+              if (err) {
+                logger.warn(`Connection ping failed for ${connection.account.email}`);
+              } else {
+                connection.lastActivity = new Date();
+              }
+            });
+          } catch (error) {
+            logger.warn(`Connection monitor error for ${connection.account.email}:`, error);
+          }
+        }
+      });
+    }, 60000); // Check every minute
   }
 
-  private encryptPassword(password: string): string {
-    return Buffer.from(password).toString('base64');
-  }
-
-  private decryptPassword(encryptedPassword: string): string {
-    return Buffer.from(encryptedPassword, 'base64').toString('utf8');
-  }
-
-  getConnectionStatus(): any {
-    const status: any = {};
+  public getConnectionStatus(): { [accountId: string]: any } {
+    const status: { [accountId: string]: any } = {};
     
-    for (const [accountId, connection] of this.connections) {
+    this.connections.forEach((connection, accountId) => {
+      const progress = this.syncProgress.get(accountId);
+      
       status[accountId] = {
-        email: connection.account.email,
         connected: connection.isConnected,
-        reconnectAttempts: connection.reconnectAttempts
+        lastActivity: connection.lastActivity,
+        errorCount: connection.errorCount,
+        email: connection.account.email,
+        syncProgress: progress || null
       };
-    }
-    
+    });
+
     return status;
   }
 
-  async shutdown(): Promise<void> {
-    logger.info('Shutting down IMAP Service...');
+  public async syncAllAccounts(): Promise<void> {
+    const accounts = await EmailAccount.find({ isActive: true });
     
-    for (const [accountId, connection] of this.connections) {
-      connection.imap.end();
+    for (const account of accounts) {
+      try {
+        await this.connectToAccount(account);
+      } catch (error) {
+        logger.error(`Failed to sync account ${account.email}:`, error);
+      }
     }
+  }
+
+  public async disconnect(): Promise<void> {
+    this.connections.forEach((connection) => {
+      connection.imap.end();
+    });
     
     this.connections.clear();
-    logger.info('✅ IMAP Service shutdown complete');
+    
+    this.reconnectTimeouts.forEach((timeout) => {
+      clearTimeout(timeout);
+    });
+    
+    this.reconnectTimeouts.clear();
   }
 }
