@@ -104,6 +104,39 @@ const mockEmails = [
     isStarred: false,
     attachments: []
   },
+  // Scheduled emails
+  {
+    id: 'scheduled-1',
+    messageId: 'scheduled-001',
+    from: { address: 'admin@reachinbox.com', name: 'Admin User' },
+    to: [{ address: 'prospect@bigco.com', name: 'Prospect' }],
+    subject: 'Follow-up: Product Demo',
+    textBody: 'Hi, just following up on our product demo. Would you like to schedule a call to discuss implementation?',
+    receivedDate: new Date('2024-02-05T10:00:00'),
+    aiCategory: 'interested',
+    aiConfidence: 0.88,
+    isRead: false,
+    folder: 'scheduled',
+    isStarred: false,
+    attachments: [],
+    scheduledFor: new Date('2024-02-05T10:00:00')
+  },
+  {
+    id: 'scheduled-2',
+    messageId: 'scheduled-002',
+    from: { address: 'admin@reachinbox.com', name: 'Admin User' },
+    to: [{ address: 'client@startup.com', name: 'Client' }],
+    subject: 'Weekly check-in',
+    textBody: 'Hi there, hope your week is going well. Let me know if you need any assistance.',
+    receivedDate: new Date('2024-02-03T09:00:00'),
+    aiCategory: 'interested',
+    aiConfidence: 0.75,
+    isRead: false,
+    folder: 'scheduled',
+    isStarred: false,
+    attachments: [],
+    scheduledFor: new Date('2024-02-03T09:00:00')
+  },
   // Archived emails
   {
     id: 'archive-1',
@@ -123,20 +156,31 @@ const mockEmails = [
 ];
 
 // Notification Component
-const NotificationToast = ({ notification, onClose }) => {
+const NotificationToast = ({ notification, onClose, isDarkMode }) => {
   useEffect(() => {
     const timer = setTimeout(onClose, 5000);
     return () => clearTimeout(timer);
   }, [onClose]);
 
   const getNotificationColor = (type) => {
-    switch (type) {
-      case 'interested': return 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300';
-      case 'meeting_booked': return 'bg-blue-500/20 border-blue-500/30 text-blue-300';
-      case 'success': return 'bg-green-500/20 border-green-500/30 text-green-300';
-      case 'error': return 'bg-red-500/20 border-red-500/30 text-red-300';
-      case 'info': return 'bg-blue-500/20 border-blue-500/30 text-blue-300';
-      default: return 'bg-slate-700/50 border-slate-600/50 text-slate-300';
+    if (isDarkMode) {
+      switch (type) {
+        case 'interested': return 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300';
+        case 'meeting_booked': return 'bg-blue-500/20 border-blue-500/30 text-blue-300';
+        case 'success': return 'bg-green-500/20 border-green-500/30 text-green-300';
+        case 'error': return 'bg-red-500/20 border-red-500/30 text-red-300';
+        case 'info': return 'bg-blue-500/20 border-blue-500/30 text-blue-300';
+        default: return 'bg-slate-700/50 border-slate-600/50 text-slate-300';
+      }
+    } else {
+      switch (type) {
+        case 'interested': return 'bg-emerald-100 border-emerald-300 text-emerald-800';
+        case 'meeting_booked': return 'bg-blue-100 border-blue-300 text-blue-800';
+        case 'success': return 'bg-green-100 border-green-300 text-green-800';
+        case 'error': return 'bg-red-100 border-red-300 text-red-800';
+        case 'info': return 'bg-blue-100 border-blue-300 text-blue-800';
+        default: return 'bg-gray-100 border-gray-300 text-gray-800';
+      }
     }
   };
 
@@ -173,7 +217,7 @@ const NotificationToast = ({ notification, onClose }) => {
 };
 
 // Account Selector Dropdown Component
-const AccountSelector = ({ selectedAccount, onAccountSelect }) => {
+const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const accounts = [
@@ -206,14 +250,18 @@ const AccountSelector = ({ selectedAccount, onAccountSelect }) => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 w-full p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white hover:bg-slate-800/70 transition-colors"
+        className={`flex items-center gap-3 w-full p-3 rounded-lg transition-colors border ${
+          isDarkMode 
+            ? 'bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-800/70' 
+            : 'bg-white/80 border-gray-300/50 text-gray-900 hover:bg-gray-50/80'
+        }`}
       >
         <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
           {selectedAccountData.name.charAt(0)}
         </div>
         <div className="flex-1 text-left">
           <div className="font-medium text-sm">{selectedAccountData.name}</div>
-          <div className="text-xs text-slate-400">{selectedAccountData.email}</div>
+          <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{selectedAccountData.email}</div>
         </div>
         <div className="flex items-center gap-2">
           {selectedAccountData.unread > 0 && (
@@ -221,12 +269,16 @@ const AccountSelector = ({ selectedAccount, onAccountSelect }) => {
               {selectedAccountData.unread}
             </span>
           )}
-          <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <ChevronDownIcon className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`} />
         </div>
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800/90 border border-slate-700/50 rounded-lg shadow-lg backdrop-blur-sm z-30 animate-in slide-in-from-top-2 duration-200">
+        <div className={`absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg backdrop-blur-sm z-30 animate-in slide-in-from-top-2 duration-200 border ${
+          isDarkMode 
+            ? 'bg-slate-800/90 border-slate-700/50' 
+            : 'bg-white/90 border-gray-300/50'
+        }`}>
           {accounts.map((account) => (
             <button
               key={account.id}
@@ -234,8 +286,12 @@ const AccountSelector = ({ selectedAccount, onAccountSelect }) => {
                 onAccountSelect(account.id);
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center gap-3 p-3 text-left hover:bg-slate-700/50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                selectedAccount === account.id ? 'bg-blue-500/20 text-blue-400' : 'text-slate-300'
+              className={`w-full flex items-center gap-3 p-3 text-left transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                selectedAccount === account.id 
+                  ? 'bg-blue-500/20 text-blue-400' 
+                  : isDarkMode 
+                    ? 'text-slate-300 hover:bg-slate-700/50' 
+                    : 'text-gray-700 hover:bg-gray-100/50'
               }`}
             >
               <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
@@ -243,7 +299,7 @@ const AccountSelector = ({ selectedAccount, onAccountSelect }) => {
               </div>
               <div className="flex-1">
                 <div className="font-medium text-sm">{account.name}</div>
-                <div className="text-xs text-slate-400">{account.email} • {account.provider}</div>
+                <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{account.email} • {account.provider}</div>
               </div>
               {account.unread > 0 && (
                 <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
@@ -253,8 +309,12 @@ const AccountSelector = ({ selectedAccount, onAccountSelect }) => {
             </button>
           ))}
           
-          <div className="border-t border-slate-700/50 p-2">
-            <button className="w-full flex items-center justify-center gap-2 p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors text-sm">
+          <div className={`border-t p-2 ${isDarkMode ? 'border-slate-700/50' : 'border-gray-300/50'}`}>
+            <button className={`w-full flex items-center justify-center gap-2 p-2 rounded-lg transition-colors text-sm ${
+              isDarkMode 
+                ? 'text-slate-400 hover:text-white hover:bg-slate-700/50' 
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100/50'
+            }`}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
@@ -266,13 +326,15 @@ const AccountSelector = ({ selectedAccount, onAccountSelect }) => {
     </div>
   );
 };
-const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts }) => {
+
+const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDarkMode }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const folders = [
     { key: 'inbox', label: 'Inbox', count: emailCounts.inbox || 0 },
     { key: 'sent', label: 'Sent', count: emailCounts.sent || 0 },
     { key: 'drafts', label: 'Drafts', count: emailCounts.drafts || 0 },
+    { key: 'scheduled', label: 'Scheduled', count: emailCounts.scheduled || 0 },
     { key: 'archive', label: 'Archive', count: emailCounts.archive || 0 },
     { key: 'deleted', label: 'Deleted', count: emailCounts.deleted || 0 }
   ];
@@ -283,15 +345,23 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts }) => 
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white hover:bg-slate-800/70 transition-colors"
+        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border ${
+          isDarkMode 
+            ? 'bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-800/70' 
+            : 'bg-white/80 border-gray-300/50 text-gray-900 hover:bg-gray-50/80'
+        }`}
       >
         <span className="font-medium">{selectedFolderData.label}</span>
-        <span className="text-slate-400">({selectedFolderData.count})</span>
-        <ChevronDownIcon className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <span className={isDarkMode ? 'text-slate-400' : 'text-gray-600'}>({selectedFolderData.count})</span>
+        <ChevronDownIcon className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-48 bg-slate-800/90 border border-slate-700/50 rounded-lg shadow-lg backdrop-blur-sm z-20 animate-in slide-in-from-top-2 duration-200">
+        <div className={`absolute top-full left-0 mt-2 w-48 rounded-lg shadow-lg backdrop-blur-sm z-20 animate-in slide-in-from-top-2 duration-200 border ${
+          isDarkMode 
+            ? 'bg-slate-800/90 border-slate-700/50' 
+            : 'bg-white/90 border-gray-300/50'
+        }`}>
           {folders.map((folder) => (
             <button
               key={folder.key}
@@ -299,12 +369,16 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts }) => 
                 onFolderSelect(folder.key);
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-700/50 transition-colors first:rounded-t-lg last:rounded-b-lg ${
-                selectedFolder === folder.key ? 'bg-blue-500/20 text-blue-400' : 'text-slate-300'
+              className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                selectedFolder === folder.key 
+                  ? 'bg-blue-500/20 text-blue-400' 
+                  : isDarkMode 
+                    ? 'text-slate-300 hover:bg-slate-700/50' 
+                    : 'text-gray-700 hover:bg-gray-100/50'
               }`}
             >
               <span>{folder.label}</span>
-              <span className="text-slate-400 text-sm">({folder.count})</span>
+              <span className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>({folder.count})</span>
             </button>
           ))}
         </div>
@@ -334,6 +408,7 @@ const EmailDashboard = () => {
       inbox: 0,
       sent: 0,
       drafts: 0,
+      scheduled: 0,
       archive: 0,
       deleted: 0,
       total: emails.length,
@@ -368,7 +443,7 @@ const EmailDashboard = () => {
     let filtered = emails;
 
     // Filter by folder/category
-    if (['inbox', 'sent', 'drafts', 'archive', 'deleted'].includes(selectedCategory)) {
+    if (['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'deleted'].includes(selectedCategory)) {
       filtered = filtered.filter(email => email.folder === selectedCategory);
     } else if (selectedCategory !== 'all') {
       filtered = filtered.filter(email => email.aiCategory === selectedCategory);
@@ -525,16 +600,19 @@ const EmailDashboard = () => {
       aiCategory: 'interested',
       aiConfidence: 0.90,
       isRead: true,
-      folder: 'sent',
+      folder: emailData.scheduled ? 'scheduled' : 'sent',
       isStarred: false,
-      attachments: emailData.attachments || []
+      attachments: emailData.attachments || [],
+      scheduledFor: emailData.scheduled || null
     };
 
     setEmails(prev => [newEmail, ...prev]);
     setNotification({
       type: 'success',
-      title: 'Email sent!',
-      message: `Email sent to ${emailData.to}`
+      title: emailData.scheduled ? 'Email scheduled!' : 'Email sent!',
+      message: emailData.scheduled 
+        ? `Email scheduled for ${new Date(emailData.scheduled).toLocaleString()}` 
+        : `Email sent to ${emailData.to}`
     });
   }, []);
 
@@ -601,7 +679,7 @@ const EmailDashboard = () => {
   }, [sidebarCollapsed, selectedEmailId, showAnalytics, showCompose, handleEmailAction]);
 
   const getCurrentFolderName = () => {
-    if (['inbox', 'sent', 'drafts', 'archive', 'deleted'].includes(selectedCategory)) {
+    if (['inbox', 'sent', 'drafts', 'scheduled', 'archive', 'deleted'].includes(selectedCategory)) {
       return selectedCategory.charAt(0).toUpperCase() + selectedCategory.slice(1);
     }
     return selectedCategory.split('_').map(word => 
@@ -616,30 +694,66 @@ const EmailDashboard = () => {
         : 'bg-gradient-to-br from-slate-50 via-white to-slate-100'
     }`}>
       <style jsx>{`
-        /* Custom Scrollbar Styles */
+        /* Enhanced Gradient Scrollbar Styles */
         .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
+          width: 8px;
+          height: 8px;
         }
         
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: ${isDarkMode ? 'rgba(51, 65, 85, 0.1)' : 'rgba(203, 213, 225, 0.2)'};
-          border-radius: 3px;
+          background: ${isDarkMode ? 'rgba(15, 23, 42, 0.3)' : 'rgba(241, 245, 249, 0.8)'};
+          border-radius: 8px;
+          margin: 4px;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: ${isDarkMode ? 'rgba(148, 163, 184, 0.3)' : 'rgba(100, 116, 139, 0.4)'};
-          border-radius: 3px;
-          transition: background 0.2s;
+          background: ${isDarkMode 
+            ? 'linear-gradient(45deg, rgba(59, 130, 246, 0.6), rgba(139, 92, 246, 0.6))' 
+            : 'linear-gradient(45deg, rgba(59, 130, 246, 0.8), rgba(139, 92, 246, 0.8))'};
+          border-radius: 8px;
+          border: ${isDarkMode ? '1px solid rgba(59, 130, 246, 0.3)' : '1px solid rgba(59, 130, 246, 0.4)'};
+          transition: all 0.3s ease;
         }
         
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: ${isDarkMode ? 'rgba(148, 163, 184, 0.5)' : 'rgba(100, 116, 139, 0.6)'};
+          background: ${isDarkMode 
+            ? 'linear-gradient(45deg, rgba(59, 130, 246, 0.8), rgba(139, 92, 246, 0.8))' 
+            : 'linear-gradient(45deg, rgba(59, 130, 246, 1), rgba(139, 92, 246, 1))'};
+          border: ${isDarkMode ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(59, 130, 246, 0.6)'};
+          transform: scale(1.1);
         }
         
+        .custom-scrollbar::-webkit-scrollbar-corner {
+          background: transparent;
+        }
+        
+        /* Firefox */
         .custom-scrollbar {
           scrollbar-width: thin;
-          scrollbar-color: ${isDarkMode ? 'rgba(148, 163, 184, 0.3) rgba(51, 65, 85, 0.1)' : 'rgba(100, 116, 139, 0.4) rgba(203, 213, 225, 0.2)'};
+          scrollbar-color: ${isDarkMode 
+            ? 'rgba(59, 130, 246, 0.6) rgba(15, 23, 42, 0.3)' 
+            : 'rgba(59, 130, 246, 0.8) rgba(241, 245, 249, 0.8)'};
+        }
+
+        /* Sexy gradient scrollbar for reply area */
+        .reply-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .reply-scrollbar::-webkit-scrollbar-track {
+          background: ${isDarkMode ? 'rgba(30, 41, 59, 0.5)' : 'rgba(248, 250, 252, 0.8)'};
+          border-radius: 6px;
+        }
+        
+        .reply-scrollbar::-webkit-scrollbar-thumb {
+          background: linear-gradient(180deg, #3b82f6, #8b5cf6, #ec4899);
+          border-radius: 6px;
+          transition: all 0.3s ease;
+        }
+        
+        .reply-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(180deg, #2563eb, #7c3aed, #db2777);
+          transform: scale(1.2);
         }
       `}</style>
       
@@ -664,6 +778,7 @@ const EmailDashboard = () => {
             </svg>
           )}
         </button>
+        
         {/* Sidebar */}
         <Sidebar
           selectedCategory={selectedCategory}
@@ -683,11 +798,11 @@ const EmailDashboard = () => {
           <div className={`w-96 flex flex-col border-r transition-colors duration-300 ${
             isDarkMode 
               ? 'border-slate-700/50 bg-slate-900/30' 
-              : 'border-slate-300/50 bg-white/30'
+              : 'border-gray-300/50 bg-white/30'
           } backdrop-blur-sm`}>
             {/* Header */}
             <div className={`flex-shrink-0 p-4 border-b transition-colors duration-300 space-y-4 ${
-              isDarkMode ? 'border-slate-700/50' : 'border-slate-300/50'
+              isDarkMode ? 'border-slate-700/50' : 'border-gray-300/50'
             }`}>
               {/* Account Selector */}
               <AccountSelector
@@ -704,7 +819,7 @@ const EmailDashboard = () => {
                   isDarkMode={isDarkMode}
                 />
                 <div className={`text-sm transition-colors duration-300 ${
-                  isDarkMode ? 'text-slate-400' : 'text-slate-600'
+                  isDarkMode ? 'text-slate-400' : 'text-gray-600'
                 }`}>
                   {filteredEmails.length} email{filteredEmails.length !== 1 ? 's' : ''}
                 </div>
@@ -743,7 +858,7 @@ const EmailDashboard = () => {
             <EmailDetail
               email={selectedEmail}
               onClose={() => setSelectedEmailId(null)}
-              onReply={(id, text) => handleEmailAction('reply', id, text)}
+              onReply={(id, text, options) => handleEmailAction('reply', id, { text, ...options })}
               onArchive={(id) => handleEmailAction('archive', id)}
               onDelete={(id) => handleEmailAction('delete', id)}
               onStar={(id) => handleEmailAction('star', id)}
@@ -756,13 +871,15 @@ const EmailDashboard = () => {
       {/* Modals */}
       <AnalyticsModal 
         isOpen={showAnalytics} 
-        onClose={() => setShowAnalytics(false)} 
+        onClose={() => setShowAnalytics(false)}
+        isDarkMode={isDarkMode}
       />
 
       <ComposeModal
         isOpen={showCompose}
         onClose={() => setShowCompose(false)}
         onSend={handleComposeSend}
+        isDarkMode={isDarkMode}
       />
 
       {/* Notification Toast */}
@@ -770,6 +887,7 @@ const EmailDashboard = () => {
         <NotificationToast
           notification={notification}
           onClose={() => setNotification(null)}
+          isDarkMode={isDarkMode}
         />
       )}
     </div>

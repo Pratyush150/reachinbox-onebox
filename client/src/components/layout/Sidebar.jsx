@@ -33,7 +33,8 @@ const Sidebar = ({
   onShowAnalytics,
   onShowNotifications,
   onShowCompose,
-  emailStats 
+  emailStats,
+  isDarkMode = true
 }) => {
   const [hoveredCategory, setHoveredCategory] = useState(null);
 
@@ -43,7 +44,7 @@ const Sidebar = ({
       label: 'Inbox', 
       icon: InboxIcon, 
       count: emailStats?.total || 0,
-      color: 'text-slate-400',
+      color: isDarkMode ? 'text-slate-400' : 'text-gray-600',
       description: 'All incoming emails'
     },
     { 
@@ -51,7 +52,7 @@ const Sidebar = ({
       label: 'Sent', 
       icon: PaperAirplaneIcon, 
       count: 8,
-      color: 'text-blue-400',
+      color: isDarkMode ? 'text-blue-400' : 'text-blue-600',
       description: 'Sent emails'
     },
     { 
@@ -59,15 +60,23 @@ const Sidebar = ({
       label: 'Drafts', 
       icon: DocumentIcon, 
       count: 3,
-      color: 'text-yellow-400',
+      color: isDarkMode ? 'text-yellow-400' : 'text-yellow-600',
       description: 'Draft emails'
+    },
+    { 
+      key: 'scheduled', 
+      label: 'Scheduled', 
+      icon: ClockIcon, 
+      count: emailStats?.scheduled || 2,
+      color: isDarkMode ? 'text-purple-400' : 'text-purple-600',
+      description: 'Scheduled emails'
     },
     { 
       key: 'archive', 
       label: 'Archive', 
       icon: ArchiveBoxIcon, 
       count: 156,
-      color: 'text-green-400',
+      color: isDarkMode ? 'text-green-400' : 'text-green-600',
       description: 'Archived emails'
     },
     { 
@@ -75,7 +84,7 @@ const Sidebar = ({
       label: 'Deleted', 
       icon: TrashIcon, 
       count: 12,
-      color: 'text-red-400',
+      color: isDarkMode ? 'text-red-400' : 'text-red-600',
       description: 'Deleted emails'
     }
   ];
@@ -86,7 +95,9 @@ const Sidebar = ({
       label: 'All Categories', 
       icon: FunnelIcon, 
       count: emailStats?.total || 0,
-      color: 'text-slate-400',
+      color: isDarkMode ? 'text-slate-400' : 'text-gray-600',
+      bgColor: isDarkMode ? 'bg-slate-500/10' : 'bg-gray-200/80',
+      borderColor: isDarkMode ? 'border-slate-500/20' : 'border-gray-300/80',
       description: 'View all AI categories'
     },
     { 
@@ -95,9 +106,9 @@ const Sidebar = ({
       icon: BoltIcon, 
       solidIcon: BoltSolid,
       count: emailStats?.interested || 0,
-      color: 'text-emerald-400',
-      bgColor: 'bg-emerald-500/10',
-      borderColor: 'border-emerald-500/20',
+      color: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
+      bgColor: isDarkMode ? 'bg-emerald-500/10' : 'bg-emerald-100/80',
+      borderColor: isDarkMode ? 'border-emerald-500/20' : 'border-emerald-400/60',
       description: 'Buying intent detected'
     },
     { 
@@ -106,9 +117,9 @@ const Sidebar = ({
       icon: CalendarIcon,
       solidIcon: CalendarSolid,
       count: emailStats?.meeting_booked || 0,
-      color: 'text-blue-400',
-      bgColor: 'bg-blue-500/10',
-      borderColor: 'border-blue-500/20',
+      color: isDarkMode ? 'text-blue-400' : 'text-blue-600',
+      bgColor: isDarkMode ? 'bg-blue-500/10' : 'bg-blue-100/80',
+      borderColor: isDarkMode ? 'border-blue-500/20' : 'border-blue-400/60',
       description: 'Scheduled meetings'
     },
     { 
@@ -116,9 +127,9 @@ const Sidebar = ({
       label: 'Not Interested', 
       icon: NoSymbolIcon, 
       count: emailStats?.not_interested || 0,
-      color: 'text-red-400',
-      bgColor: 'bg-red-500/10',
-      borderColor: 'border-red-500/20',
+      color: isDarkMode ? 'text-red-400' : 'text-red-600',
+      bgColor: isDarkMode ? 'bg-red-500/10' : 'bg-red-100/80',
+      borderColor: isDarkMode ? 'border-red-500/20' : 'border-red-400/60',
       description: 'Declined proposals'
     },
     { 
@@ -127,9 +138,9 @@ const Sidebar = ({
       icon: ExclamationTriangleIcon,
       solidIcon: ExclamationSolid,
       count: emailStats?.spam || 0,
-      color: 'text-orange-400',
-      bgColor: 'bg-orange-500/10',
-      borderColor: 'border-orange-500/20',
+      color: isDarkMode ? 'text-orange-400' : 'text-orange-600',
+      bgColor: isDarkMode ? 'bg-orange-500/10' : 'bg-orange-100/80',
+      borderColor: isDarkMode ? 'border-orange-500/20' : 'border-orange-400/60',
       description: 'Promotional emails'
     },
     { 
@@ -137,9 +148,9 @@ const Sidebar = ({
       label: 'Out of Office', 
       icon: ClockIcon, 
       count: emailStats?.out_of_office || 0,
-      color: 'text-purple-400',
-      bgColor: 'bg-purple-500/10',
-      borderColor: 'border-purple-500/20',
+      color: isDarkMode ? 'text-purple-400' : 'text-purple-600',
+      bgColor: isDarkMode ? 'bg-purple-500/10' : 'bg-purple-100/80',
+      borderColor: isDarkMode ? 'border-purple-500/20' : 'border-purple-400/60',
       description: 'Auto-reply messages'
     }
   ];
@@ -150,7 +161,7 @@ const Sidebar = ({
       label: 'Analytics',
       icon: ChartBarIcon,
       onClick: onShowAnalytics,
-      color: 'text-blue-400',
+      color: isDarkMode ? 'text-blue-400' : 'text-blue-600',
       description: 'View detailed analytics'
     },
     {
@@ -158,7 +169,7 @@ const Sidebar = ({
       label: 'Notifications',
       icon: BellIcon,
       onClick: onShowNotifications,
-      color: 'text-yellow-400',
+      color: isDarkMode ? 'text-yellow-400' : 'text-yellow-600',
       hasNotification: true,
       description: 'View notifications'
     },
@@ -167,7 +178,7 @@ const Sidebar = ({
       label: 'Settings',
       icon: CogIcon,
       onClick: () => console.log('Settings clicked'),
-      color: 'text-slate-400',
+      color: isDarkMode ? 'text-slate-400' : 'text-gray-600',
       description: 'Configure settings'
     }
   ];
@@ -177,22 +188,24 @@ const Sidebar = ({
       ? category.solidIcon 
       : category.icon;
 
+    const isSelected = selectedCategory === category.key;
+
     return (
       <button
         onClick={() => onCategorySelect(category.key)}
         onMouseEnter={() => setHoveredCategory(category.key)}
         onMouseLeave={() => setHoveredCategory(null)}
-        className={`
-          group w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 relative
-          ${selectedCategory === category.key
-            ? `${category.bgColor || 'bg-blue-500/20'} ${category.color} border ${category.borderColor || 'border-blue-500/30'} shadow-lg`
-            : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-          }
-        `}
+        className={`group w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 relative ${
+          isSelected
+            ? `${category.bgColor || (isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100/80')} ${category.color} border ${category.borderColor || (isDarkMode ? 'border-blue-500/30' : 'border-blue-400/60')} shadow-lg`
+            : isDarkMode 
+              ? 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+        }`}
       >
         <div className={`relative ${isCollapsed ? 'mx-auto' : ''}`}>
           <IconComponent className={`w-5 h-5 ${category.color} transition-all duration-200 ${
-            selectedCategory === category.key ? 'scale-110' : 'group-hover:scale-105'
+            isSelected ? 'scale-110' : 'group-hover:scale-105'
           }`} />
           
           {/* Priority indicator for important categories */}
@@ -206,24 +219,26 @@ const Sidebar = ({
             <div className="flex-1 text-left">
               <div className="font-medium">{category.label}</div>
               {hoveredCategory === category.key && (
-                <div className="text-xs text-slate-500 animate-in fade-in duration-200">
+                <div className={`text-xs opacity-80 animate-in fade-in duration-200 ${
+                  isDarkMode ? 'text-slate-500' : 'text-gray-500'
+                }`}>
                   {category.description}
                 </div>
               )}
             </div>
             
             <div className="flex items-center gap-2">
-              <span className={`
-                text-xs px-2.5 py-1 rounded-full font-medium transition-all duration-200
-                ${selectedCategory === category.key
-                  ? `${category.bgColor || 'bg-blue-500/20'} ${category.color}`
-                  : 'bg-slate-700/50 text-slate-400 group-hover:bg-slate-700 group-hover:text-slate-300'
-                }
-              `}>
+              <span className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all duration-200 ${
+                isSelected
+                  ? `${category.bgColor || (isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100/80')} ${category.color}`
+                  : isDarkMode 
+                    ? 'bg-slate-700/50 text-slate-400 group-hover:bg-slate-700 group-hover:text-slate-300'
+                    : 'bg-gray-200/60 text-gray-600 group-hover:bg-gray-300/60 group-hover:text-gray-800'
+              }`}>
                 {category.count}
               </span>
               
-              {selectedCategory === category.key && (
+              {isSelected && (
                 <ChevronRightIcon className="w-4 h-4 text-current animate-in slide-in-from-left-1 duration-200" />
               )}
             </div>
@@ -232,9 +247,15 @@ const Sidebar = ({
 
         {/* Tooltip for collapsed state */}
         {isCollapsed && (
-          <div className="absolute left-full ml-2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
+          <div className={`absolute left-full ml-2 px-3 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap border ${
+            isDarkMode 
+              ? 'bg-slate-800 border-slate-700 text-white' 
+              : 'bg-white border-gray-300 text-gray-900 shadow-lg'
+          }`}>
             <div className="font-medium">{category.label}</div>
-            <div className="text-xs text-slate-400">{category.count} emails</div>
+            <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>
+              {category.count} emails
+            </div>
           </div>
         )}
       </button>
@@ -242,13 +263,18 @@ const Sidebar = ({
   };
 
   return (
-    <div className={`
-      flex-shrink-0 bg-slate-900/50 border-r border-slate-700/50 backdrop-blur-sm transition-all duration-300
-      ${isCollapsed ? 'w-16' : 'w-64'}
-    `}>
+    <div className={`flex-shrink-0 border-r backdrop-blur-sm transition-all duration-300 ${
+      isCollapsed ? 'w-16' : 'w-64'
+    } ${
+      isDarkMode 
+        ? 'bg-slate-900/50 border-slate-700/50' 
+        : 'bg-white/50 border-gray-300/50'
+    }`}>
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="flex-shrink-0 p-4 border-b border-slate-700/30">
+        <div className={`flex-shrink-0 p-4 border-b ${
+          isDarkMode ? 'border-slate-700/30' : 'border-gray-300/30'
+        }`}>
           <div className="flex items-center justify-between">
             {!isCollapsed && (
               <div className="flex items-center gap-3">
@@ -256,14 +282,26 @@ const Sidebar = ({
                   <InboxIcon className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-lg font-bold text-white">ReachInbox</h1>
-                  <p className="text-xs text-slate-400">AI Email Manager</p>
+                  <h1 className={`text-lg font-bold ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    ReachInbox
+                  </h1>
+                  <p className={`text-xs ${
+                    isDarkMode ? 'text-slate-400' : 'text-gray-600'
+                  }`}>
+                    AI Email Manager
+                  </p>
                 </div>
               </div>
             )}
             <button
               onClick={onToggleCollapse}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkMode 
+                  ? 'text-slate-400 hover:text-white hover:bg-slate-700/50' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+              }`}
             >
               <Bars3Icon className="w-4 h-4" />
             </button>
@@ -285,26 +323,54 @@ const Sidebar = ({
 
         {/* Quick Stats */}
         {!isCollapsed && (
-          <div className="flex-shrink-0 px-4 pb-4 border-b border-slate-700/30">
+          <div className={`flex-shrink-0 px-4 pb-4 border-b ${
+            isDarkMode ? 'border-slate-700/30' : 'border-gray-300/30'
+          }`}>
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-800/30 border border-slate-700/30 rounded-lg p-3 backdrop-blur-sm">
-                <div className="text-xl font-bold text-white">{(emailStats?.total || 0).toLocaleString()}</div>
-                <div className="text-xs text-slate-400">Total</div>
+              <div className={`rounded-lg p-3 backdrop-blur-sm border ${
+                isDarkMode 
+                  ? 'bg-slate-800/30 border-slate-700/30' 
+                  : 'bg-white/60 border-gray-300/30'
+              }`}>
+                <div className={`text-xl font-bold ${
+                  isDarkMode ? 'text-white' : 'text-gray-900'
+                }`}>
+                  {(emailStats?.total || 0).toLocaleString()}
+                </div>
+                <div className={`text-xs ${
+                  isDarkMode ? 'text-slate-400' : 'text-gray-600'
+                }`}>
+                  Total
+                </div>
               </div>
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 backdrop-blur-sm">
-                <div className="text-xl font-bold text-blue-400">{emailStats?.unread || 0}</div>
-                <div className="text-xs text-blue-300">Unread</div>
+              <div className={`rounded-lg p-3 backdrop-blur-sm border ${
+                isDarkMode 
+                  ? 'bg-blue-500/10 border-blue-500/20' 
+                  : 'bg-blue-100/80 border-blue-400/60'
+              }`}>
+                <div className={`text-xl font-bold ${
+                  isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                }`}>
+                  {emailStats?.unread || 0}
+                </div>
+                <div className={`text-xs ${
+                  isDarkMode ? 'text-blue-300' : 'text-blue-700'
+                }`}>
+                  Unread
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Navigation */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
           {/* Mail Folders */}
           <nav className="space-y-2">
             {!isCollapsed && (
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-4">
+              <div className={`text-xs font-medium uppercase tracking-wider mb-4 ${
+                isDarkMode ? 'text-slate-500' : 'text-gray-500'
+              }`}>
                 Mail Folders
               </div>
             )}
@@ -317,7 +383,9 @@ const Sidebar = ({
           {/* AI Categories */}
           <nav className="space-y-2">
             {!isCollapsed && (
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-4">
+              <div className={`text-xs font-medium uppercase tracking-wider mb-4 ${
+                isDarkMode ? 'text-slate-500' : 'text-gray-500'
+              }`}>
                 AI Categories
               </div>
             )}
@@ -330,7 +398,9 @@ const Sidebar = ({
           {/* Quick Actions */}
           <div>
             {!isCollapsed && (
-              <div className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-4">
+              <div className={`text-xs font-medium uppercase tracking-wider mb-4 ${
+                isDarkMode ? 'text-slate-500' : 'text-gray-500'
+              }`}>
                 Quick Actions
               </div>
             )}
@@ -340,7 +410,11 @@ const Sidebar = ({
                 <button
                   key={action.key}
                   onClick={action.onClick}
-                  className="group w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all duration-200 relative"
+                  className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative ${
+                    isDarkMode 
+                      ? 'text-slate-400 hover:text-white hover:bg-slate-800/50' 
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
+                  }`}
                 >
                   <div className={`relative ${isCollapsed ? 'mx-auto' : ''}`}>
                     <action.icon className={`w-5 h-5 ${action.color} group-hover:scale-105 transition-transform`} />
@@ -355,9 +429,17 @@ const Sidebar = ({
 
                   {/* Tooltip for collapsed state */}
                   {isCollapsed && (
-                    <div className="absolute left-full ml-2 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap">
+                    <div className={`absolute left-full ml-2 px-3 py-2 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 whitespace-nowrap border ${
+                      isDarkMode 
+                        ? 'bg-slate-800 border-slate-700 text-white' 
+                        : 'bg-white border-gray-300 text-gray-900 shadow-lg'
+                    }`}>
                       <div className="font-medium">{action.label}</div>
-                      <div className="text-xs text-slate-400">{action.description}</div>
+                      <div className={`text-xs ${
+                        isDarkMode ? 'text-slate-400' : 'text-gray-600'
+                      }`}>
+                        {action.description}
+                      </div>
                     </div>
                   )}
                 </button>
@@ -367,15 +449,25 @@ const Sidebar = ({
         </div>
 
         {/* User Profile */}
-        <div className="flex-shrink-0 p-4 border-t border-slate-700/30">
+        <div className={`flex-shrink-0 p-4 border-t ${
+          isDarkMode ? 'border-slate-700/30' : 'border-gray-300/30'
+        }`}>
           <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
             <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
               <UserIcon className="w-4 h-4 text-white" />
             </div>
             {!isCollapsed && (
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-white truncate">Admin User</div>
-                <div className="text-xs text-slate-400">admin@reachinbox.com</div>
+                <div className={`text-sm font-medium truncate ${
+                  isDarkMode ? 'text-white' : 'text-gray-900'
+                }`}>
+                  Admin User
+                </div>
+                <div className={`text-xs ${
+                  isDarkMode ? 'text-slate-400' : 'text-gray-600'
+                }`}>
+                  admin@reachinbox.com
+                </div>
               </div>
             )}
           </div>
