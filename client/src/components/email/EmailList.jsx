@@ -10,36 +10,31 @@ import {
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid';
 
-const CategoryBadge = ({ category, confidence }) => {
+const CategoryBadge = ({ category, confidence, isDarkMode }) => {
   const categoryConfig = {
     interested: {
-      color: 'text-emerald-400',
-      bg: 'bg-emerald-500/10',
-      border: 'border-emerald-500/20',
+      color: isDarkMode ? 'text-emerald-300' : 'text-emerald-700',
+      bg: isDarkMode ? 'bg-emerald-500/15 border-emerald-400/30' : 'bg-emerald-50 border-emerald-200',
       label: 'Interested'
     },
     meeting_booked: {
-      color: 'text-blue-400',
-      bg: 'bg-blue-500/10',
-      border: 'border-blue-500/20',
+      color: isDarkMode ? 'text-blue-300' : 'text-blue-700',
+      bg: isDarkMode ? 'bg-blue-500/15 border-blue-400/30' : 'bg-blue-50 border-blue-200',
       label: 'Meeting'
     },
     not_interested: {
-      color: 'text-red-400',
-      bg: 'bg-red-500/10',
-      border: 'border-red-500/20',
+      color: isDarkMode ? 'text-red-300' : 'text-red-700',
+      bg: isDarkMode ? 'bg-red-500/15 border-red-400/30' : 'bg-red-50 border-red-200',
       label: 'Not Interested'
     },
     spam: {
-      color: 'text-orange-400',
-      bg: 'bg-orange-500/10',
-      border: 'border-orange-500/20',
+      color: isDarkMode ? 'text-orange-300' : 'text-orange-700',
+      bg: isDarkMode ? 'bg-orange-500/15 border-orange-400/30' : 'bg-orange-50 border-orange-200',
       label: 'Spam'
     },
     out_of_office: {
-      color: 'text-purple-400',
-      bg: 'bg-purple-500/10',
-      border: 'border-purple-500/20',
+      color: isDarkMode ? 'text-purple-300' : 'text-purple-700',
+      bg: isDarkMode ? 'bg-purple-500/15 border-purple-400/30' : 'bg-purple-50 border-purple-200',
       label: 'OOO'
     }
   };
@@ -48,10 +43,12 @@ const CategoryBadge = ({ category, confidence }) => {
   if (!config) return null;
 
   return (
-    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium backdrop-blur-sm border transition-all duration-200 hover:scale-105 ${config.bg} ${config.color} ${config.border}`}>
+    <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium border transition-all duration-200 hover:scale-105 ${config.bg} ${config.color}`}>
       <span>{config.label}</span>
       {confidence && (
-        <span className="text-white/60">{Math.round(confidence * 100)}%</span>
+        <span className={`text-xs font-normal ${isDarkMode ? 'text-white/60' : 'text-black/60'}`}>
+          {Math.round(confidence * 100)}%
+        </span>
       )}
     </div>
   );
@@ -66,7 +63,8 @@ const EmailListItem = ({
   onStarToggle,
   onArchive,
   onDelete,
-  onMarkRead 
+  onMarkRead,
+  isDarkMode
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -96,12 +94,12 @@ const EmailListItem = ({
 
   const getPriorityColor = (category) => {
     switch (category) {
-      case 'interested': return 'border-l-emerald-400';
-      case 'meeting_booked': return 'border-l-blue-400';
-      case 'not_interested': return 'border-l-red-400';
-      case 'spam': return 'border-l-orange-400';
-      case 'out_of_office': return 'border-l-purple-400';
-      default: return 'border-l-slate-600';
+      case 'interested': return isDarkMode ? 'border-l-emerald-400' : 'border-l-emerald-500';
+      case 'meeting_booked': return isDarkMode ? 'border-l-blue-400' : 'border-l-blue-500';
+      case 'not_interested': return isDarkMode ? 'border-l-red-400' : 'border-l-red-500';
+      case 'spam': return isDarkMode ? 'border-l-orange-400' : 'border-l-orange-500';
+      case 'out_of_office': return isDarkMode ? 'border-l-purple-400' : 'border-l-purple-500';
+      default: return isDarkMode ? 'border-l-slate-600' : 'border-l-gray-400';
     }
   };
 
@@ -110,15 +108,21 @@ const EmailListItem = ({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       className={`
-        group relative border-l-4 transition-all duration-200 cursor-pointer
+        group relative border-l-4 transition-all duration-200 cursor-pointer border-r border-t border-b
         ${getPriorityColor(email.aiCategory)}
         ${isSelected
-          ? 'bg-blue-500/10 border-r border-t border-b border-blue-500/30 shadow-lg shadow-blue-500/10'
+          ? isDarkMode 
+            ? 'bg-blue-500/15 border-r-blue-400/30 border-t-blue-400/30 border-b-blue-400/30 shadow-lg shadow-blue-500/10'
+            : 'bg-blue-50 border-r-blue-200 border-t-blue-200 border-b-blue-200 shadow-lg shadow-blue-500/10'
           : email.isRead
-            ? 'bg-slate-800/30 border-r border-t border-b border-slate-700/30 hover:bg-slate-800/50'
-            : 'bg-slate-800/50 border-r border-t border-b border-slate-700/50 hover:bg-slate-800/70'
+            ? isDarkMode 
+              ? 'bg-slate-800/40 border-r-slate-600/30 border-t-slate-600/30 border-b-slate-600/30 hover:bg-slate-800/60'
+              : 'bg-white/60 border-r-gray-200/60 border-t-gray-200/60 border-b-gray-200/60 hover:bg-gray-50/80'
+            : isDarkMode 
+              ? 'bg-slate-800/70 border-r-slate-600/40 border-t-slate-600/40 border-b-slate-600/40 hover:bg-slate-800/90'
+              : 'bg-white/90 border-r-gray-300/60 border-t-gray-300/60 border-b-gray-300/60 hover:bg-gray-50'
         }
-        backdrop-blur-sm
+        backdrop-blur-sm shadow-sm
       `}
     >
       <div 
@@ -135,17 +139,23 @@ const EmailListItem = ({
                 e.stopPropagation();
                 onToggleSelect(email.id);
               }}
-              className="w-4 h-4 text-blue-500 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-2 transition-all duration-200"
+              className={`w-4 h-4 text-blue-500 rounded focus:ring-blue-500 focus:ring-2 transition-all duration-200 ${
+                isDarkMode 
+                  ? 'bg-slate-700 border-slate-600' 
+                  : 'bg-white border-gray-300'
+              }`}
             />
           </div>
 
           {/* Avatar */}
           <div className="flex-shrink-0">
             <div className={`
-              w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200
+              w-10 h-10 rounded-xl flex items-center justify-center text-sm font-medium transition-all duration-200 shadow-sm
               ${email.isRead 
-                ? 'bg-slate-700 text-slate-300' 
-                : 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg'
+                ? isDarkMode 
+                  ? 'bg-slate-700/60 text-slate-300 border border-slate-600/40' 
+                  : 'bg-gray-100 text-gray-600 border border-gray-300/60'
+                : 'bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg border border-blue-400/30'
               }
               ${isSelected ? 'scale-110 shadow-xl' : 'group-hover:scale-105'}
             `}>
@@ -156,10 +166,12 @@ const EmailListItem = ({
           {/* Content */}
           <div className="flex-1 min-w-0">
             {/* Header */}
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 min-w-0">
-                <h3 className={`font-medium truncate transition-colors duration-200 ${
-                  email.isRead ? 'text-slate-300' : 'text-white'
+                <h3 className={`font-semibold truncate transition-colors duration-200 ${
+                  email.isRead 
+                    ? isDarkMode ? 'text-slate-300' : 'text-gray-700'
+                    : isDarkMode ? 'text-white' : 'text-gray-900'
                 }`}>
                   {email.from.name || email.from.address}
                 </h3>
@@ -174,7 +186,9 @@ const EmailListItem = ({
               </div>
               
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-slate-400">
+                <span className={`text-xs font-medium ${
+                  isDarkMode ? 'text-slate-400' : 'text-gray-600'
+                }`}>
                   {formatDate(email.receivedDate)}
                 </span>
                 
@@ -185,14 +199,18 @@ const EmailListItem = ({
             </div>
 
             {/* Subject */}
-            <p className={`text-sm truncate mb-2 transition-colors duration-200 ${
-              email.isRead ? 'text-slate-400' : 'text-slate-200'
+            <p className={`text-sm truncate mb-2 transition-colors duration-200 font-medium ${
+              email.isRead 
+                ? isDarkMode ? 'text-slate-400' : 'text-gray-600'
+                : isDarkMode ? 'text-slate-200' : 'text-gray-800'
             }`}>
               {email.subject}
             </p>
 
             {/* Preview */}
-            <p className="text-xs text-slate-500 truncate mb-3 leading-relaxed">
+            <p className={`text-xs truncate mb-3 leading-relaxed ${
+              isDarkMode ? 'text-slate-500' : 'text-gray-500'
+            }`}>
               {email.textBody}
             </p>
 
@@ -202,10 +220,15 @@ const EmailListItem = ({
                 <CategoryBadge 
                   category={email.aiCategory} 
                   confidence={email.aiConfidence}
+                  isDarkMode={isDarkMode}
                 />
                 
                 {email.attachments && email.attachments.length > 0 && (
-                  <div className="text-xs text-slate-400 bg-slate-700/50 px-2 py-1 rounded">
+                  <div className={`text-xs px-2 py-1 rounded-lg border ${
+                    isDarkMode 
+                      ? 'text-slate-400 bg-slate-700/50 border-slate-600/40' 
+                      : 'text-gray-600 bg-gray-100/80 border-gray-300/60'
+                  }`}>
                     📎 {email.attachments.length}
                   </div>
                 )}
@@ -220,7 +243,11 @@ const EmailListItem = ({
                     e.stopPropagation();
                     onStarToggle(email.id);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-all duration-200"
+                  className={`p-1.5 rounded-lg transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'text-slate-400 hover:text-yellow-400 hover:bg-yellow-400/10' 
+                      : 'text-gray-500 hover:text-yellow-500 hover:bg-yellow-50'
+                  }`}
                   title="Star email"
                 >
                   {email.isStarred ? (
@@ -235,7 +262,11 @@ const EmailListItem = ({
                     e.stopPropagation();
                     onMarkRead(email.id, !email.isRead);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded-lg transition-all duration-200"
+                  className={`p-1.5 rounded-lg transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'text-slate-400 hover:text-blue-400 hover:bg-blue-400/10' 
+                      : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'
+                  }`}
                   title={email.isRead ? "Mark unread" : "Mark read"}
                 >
                   {email.isRead ? (
@@ -250,7 +281,11 @@ const EmailListItem = ({
                     e.stopPropagation();
                     onArchive(email.id);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all duration-200"
+                  className={`p-1.5 rounded-lg transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'text-slate-400 hover:text-green-400 hover:bg-green-400/10' 
+                      : 'text-gray-500 hover:text-green-600 hover:bg-green-50'
+                  }`}
                   title="Archive"
                 >
                   <ArchiveBoxIcon className="w-4 h-4" />
@@ -261,7 +296,11 @@ const EmailListItem = ({
                     e.stopPropagation();
                     onDelete(email.id);
                   }}
-                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all duration-200"
+                  className={`p-1.5 rounded-lg transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'text-slate-400 hover:text-red-400 hover:bg-red-400/10' 
+                      : 'text-gray-500 hover:text-red-600 hover:bg-red-50'
+                  }`}
                   title="Delete"
                 >
                   <TrashIcon className="w-4 h-4" />
@@ -274,7 +313,9 @@ const EmailListItem = ({
 
       {/* Loading indicator for actions */}
       {email.isLoading && (
-        <div className="absolute inset-0 bg-slate-800/50 backdrop-blur-sm flex items-center justify-center">
+        <div className={`absolute inset-0 backdrop-blur-sm flex items-center justify-center ${
+          isDarkMode ? 'bg-slate-800/50' : 'bg-white/50'
+        }`}>
           <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
@@ -289,7 +330,8 @@ const EmailList = ({
   loading,
   onBulkAction,
   searchTerm,
-  filters 
+  filters,
+  isDarkMode = true
 }) => {
   const [selectedEmails, setSelectedEmails] = useState(new Set());
   const [sortBy, setSortBy] = useState('date'); // date, sender, subject
@@ -355,12 +397,24 @@ const EmailList = ({
       <div className="p-4 space-y-4">
         {[...Array(5)].map((_, i) => (
           <div key={i} className="animate-pulse">
-            <div className="flex items-start gap-4 p-4 bg-slate-800/30 rounded-xl">
-              <div className="w-10 h-10 bg-slate-700 rounded-full" />
+            <div className={`flex items-start gap-4 p-4 rounded-xl border ${
+              isDarkMode 
+                ? 'bg-slate-800/40 border-slate-600/30' 
+                : 'bg-white/60 border-gray-200/60'
+            }`}>
+              <div className={`w-10 h-10 rounded-xl ${
+                isDarkMode ? 'bg-slate-700' : 'bg-gray-200'
+              }`} />
               <div className="flex-1 space-y-2">
-                <div className="h-4 bg-slate-700 rounded w-3/4" />
-                <div className="h-3 bg-slate-800 rounded w-1/2" />
-                <div className="h-3 bg-slate-800 rounded w-full" />
+                <div className={`h-4 rounded w-3/4 ${
+                  isDarkMode ? 'bg-slate-700' : 'bg-gray-200'
+                }`} />
+                <div className={`h-3 rounded w-1/2 ${
+                  isDarkMode ? 'bg-slate-800' : 'bg-gray-100'
+                }`} />
+                <div className={`h-3 rounded w-full ${
+                  isDarkMode ? 'bg-slate-800' : 'bg-gray-100'
+                }`} />
               </div>
             </div>
           </div>
@@ -371,33 +425,53 @@ const EmailList = ({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header Controls */}
-      <div className="flex-shrink-0 p-4 border-b border-slate-700/50 space-y-4">
+      {/* Header Controls - Enhanced */}
+      <div className={`flex-shrink-0 p-4 border-b space-y-4 ${
+        isDarkMode ? 'border-slate-600/40' : 'border-gray-200/60'
+      }`}>
         {/* Bulk Actions */}
         {selectedEmails.size > 0 && (
-          <div className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 backdrop-blur-sm animate-in slide-in-from-top-2 duration-200">
+          <div className={`rounded-xl p-3 border animate-in slide-in-from-top-2 duration-200 shadow-sm ${
+            isDarkMode 
+              ? 'bg-slate-800/60 border-slate-600/40 shadow-slate-900/20' 
+              : 'bg-white/80 border-gray-200/60 shadow-gray-900/5'
+          }`}>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-300">
+              <span className={`text-sm font-medium ${
+                isDarkMode ? 'text-slate-200' : 'text-gray-800'
+              }`}>
                 {selectedEmails.size} email{selectedEmails.size !== 1 ? 's' : ''} selected
               </span>
               <div className="flex gap-2">
                 <button 
                   onClick={() => handleBulkAction('markRead')}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm hover:bg-blue-500/30 transition-colors"
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm hover:scale-105 transition-all duration-200 border ${
+                    isDarkMode 
+                      ? 'bg-blue-500/20 text-blue-300 border-blue-400/30 hover:bg-blue-500/30' 
+                      : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                  }`}
                 >
                   <EyeIcon className="w-4 h-4" />
                   Mark Read
                 </button>
                 <button 
                   onClick={() => handleBulkAction('archive')}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-sm hover:bg-green-500/30 transition-colors"
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm hover:scale-105 transition-all duration-200 border ${
+                    isDarkMode 
+                      ? 'bg-green-500/20 text-green-300 border-green-400/30 hover:bg-green-500/30' 
+                      : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                  }`}
                 >
                   <ArchiveBoxIcon className="w-4 h-4" />
                   Archive
                 </button>
                 <button 
                   onClick={() => handleBulkAction('delete')}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-red-500/20 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition-colors"
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm hover:scale-105 transition-all duration-200 border ${
+                    isDarkMode 
+                      ? 'bg-red-500/20 text-red-300 border-red-400/30 hover:bg-red-500/30' 
+                      : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                  }`}
                 >
                   <TrashIcon className="w-4 h-4" />
                   Delete
@@ -407,19 +481,25 @@ const EmailList = ({
           </div>
         )}
 
-        {/* List Controls */}
+        {/* List Controls - Enhanced */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={selectAllEmails}
-              className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+              className={`flex items-center gap-2 text-sm transition-colors ${
+                isDarkMode 
+                  ? 'text-slate-300 hover:text-white' 
+                  : 'text-gray-700 hover:text-gray-900'
+              }`}
             >
               <div className={`w-4 h-4 border rounded transition-all duration-200 ${
                 selectedEmails.size === emails.length 
                   ? 'bg-blue-500 border-blue-500' 
                   : selectedEmails.size > 0
                     ? 'bg-blue-500/50 border-blue-500'
-                    : 'border-slate-600 hover:border-slate-500'
+                    : isDarkMode 
+                      ? 'border-slate-600 hover:border-slate-500' 
+                      : 'border-gray-400 hover:border-gray-500'
               }`}>
                 {selectedEmails.size > 0 && (
                   <CheckIcon className="w-4 h-4 text-white" />
@@ -428,17 +508,23 @@ const EmailList = ({
               Select All
             </button>
 
-            <div className="text-sm text-slate-400">
+            <div className={`text-sm font-medium ${
+              isDarkMode ? 'text-slate-300' : 'text-gray-700'
+            }`}>
               {emails.length} email{emails.length !== 1 ? 's' : ''}
             </div>
           </div>
 
-          {/* Sort Controls */}
+          {/* Sort Controls - Enhanced */}
           <div className="flex items-center gap-2">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-2 py-1 text-xs text-white focus:ring-2 focus:ring-blue-500/50"
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors focus:ring-2 focus:ring-blue-500/50 ${
+                isDarkMode 
+                  ? 'bg-slate-800/50 border-slate-600/50 text-white focus:border-transparent' 
+                  : 'bg-white/80 border-gray-300/50 text-gray-900 focus:border-transparent'
+              }`}
             >
               <option value="date">Date</option>
               <option value="sender">Sender</option>
@@ -447,7 +533,11 @@ const EmailList = ({
             
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="p-1 text-slate-400 hover:text-white transition-colors"
+              className={`p-1.5 rounded-lg transition-colors border ${
+                isDarkMode 
+                  ? 'text-slate-300 hover:text-white border-slate-600/50 hover:bg-slate-800/50' 
+                  : 'text-gray-600 hover:text-gray-900 border-gray-300/50 hover:bg-gray-100/50'
+              }`}
               title={`Sort ${sortOrder === 'asc' ? 'descending' : 'ascending'}`}
             >
               {sortOrder === 'desc' ? '↓' : '↑'}
@@ -456,20 +546,22 @@ const EmailList = ({
         </div>
       </div>
 
-      {/* Email List */}
+      {/* Email List - Enhanced */}
       <div className="flex-1 overflow-y-auto">
         {sortedEmails.length === 0 ? (
-          <div className="flex items-center justify-center h-64 text-slate-400">
+          <div className={`flex items-center justify-center h-64 ${
+            isDarkMode ? 'text-slate-400' : 'text-gray-600'
+          }`}>
             <div className="text-center">
               <ClockIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No emails found</p>
+              <p className="font-medium">No emails found</p>
               {searchTerm && (
-                <p className="text-sm mt-2">Try adjusting your search or filters</p>
+                <p className="text-sm mt-2 opacity-75">Try adjusting your search or filters</p>
               )}
             </div>
           </div>
         ) : (
-          <div className="divide-y divide-slate-700/30">
+          <div className="space-y-1 p-2">
             {sortedEmails.map((email) => (
               <EmailListItem
                 key={email.id}
@@ -482,6 +574,7 @@ const EmailList = ({
                 onArchive={(id) => console.log('Archive:', id)}
                 onDelete={(id) => console.log('Delete:', id)}
                 onMarkRead={(id, read) => console.log('Mark read:', id, read)}
+                isDarkMode={isDarkMode}
               />
             ))}
           </div>

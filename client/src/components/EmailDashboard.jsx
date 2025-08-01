@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { ChevronDownIcon, KeyboardArrowDownIcon } from '@heroicons/react/24/outline';
 
-// Import our modular components
+// Import our enhanced modular components
 import Sidebar from './layout/Sidebar';
 import SearchCombobox from './ui/SearchCombobox';
 import FilterMenu from './ui/FilterMenu';
@@ -155,7 +155,7 @@ const mockEmails = [
   }
 ];
 
-// Notification Component
+// Enhanced Notification Component
 const NotificationToast = ({ notification, onClose, isDarkMode }) => {
   useEffect(() => {
     const timer = setTimeout(onClose, 5000);
@@ -165,21 +165,21 @@ const NotificationToast = ({ notification, onClose, isDarkMode }) => {
   const getNotificationColor = (type) => {
     if (isDarkMode) {
       switch (type) {
-        case 'interested': return 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300';
-        case 'meeting_booked': return 'bg-blue-500/20 border-blue-500/30 text-blue-300';
-        case 'success': return 'bg-green-500/20 border-green-500/30 text-green-300';
-        case 'error': return 'bg-red-500/20 border-red-500/30 text-red-300';
-        case 'info': return 'bg-blue-500/20 border-blue-500/30 text-blue-300';
-        default: return 'bg-slate-700/50 border-slate-600/50 text-slate-300';
+        case 'interested': return 'bg-emerald-500/20 border-emerald-400/40 text-emerald-300 shadow-emerald-500/20';
+        case 'meeting_booked': return 'bg-blue-500/20 border-blue-400/40 text-blue-300 shadow-blue-500/20';
+        case 'success': return 'bg-green-500/20 border-green-400/40 text-green-300 shadow-green-500/20';
+        case 'error': return 'bg-red-500/20 border-red-400/40 text-red-300 shadow-red-500/20';
+        case 'info': return 'bg-blue-500/20 border-blue-400/40 text-blue-300 shadow-blue-500/20';
+        default: return 'bg-slate-700/60 border-slate-600/60 text-slate-200 shadow-slate-900/40';
       }
     } else {
       switch (type) {
-        case 'interested': return 'bg-emerald-100 border-emerald-300 text-emerald-800';
-        case 'meeting_booked': return 'bg-blue-100 border-blue-300 text-blue-800';
-        case 'success': return 'bg-green-100 border-green-300 text-green-800';
-        case 'error': return 'bg-red-100 border-red-300 text-red-800';
-        case 'info': return 'bg-blue-100 border-blue-300 text-blue-800';
-        default: return 'bg-gray-100 border-gray-300 text-gray-800';
+        case 'interested': return 'bg-emerald-50 border-emerald-200 text-emerald-800 shadow-emerald-500/20';
+        case 'meeting_booked': return 'bg-blue-50 border-blue-200 text-blue-800 shadow-blue-500/20';
+        case 'success': return 'bg-green-50 border-green-200 text-green-800 shadow-green-500/20';
+        case 'error': return 'bg-red-50 border-red-200 text-red-800 shadow-red-500/20';
+        case 'info': return 'bg-blue-50 border-blue-200 text-blue-800 shadow-blue-500/20';
+        default: return 'bg-white border-gray-200 text-gray-800 shadow-gray-500/20';
       }
     }
   };
@@ -196,12 +196,12 @@ const NotificationToast = ({ notification, onClose, isDarkMode }) => {
   };
 
   return (
-    <div className={`fixed top-4 right-4 max-w-sm p-4 rounded-xl border backdrop-blur-sm z-50 animate-in slide-in-from-right-2 duration-300 shadow-lg ${getNotificationColor(notification.type)}`}>
+    <div className={`fixed top-4 right-4 max-w-sm p-4 rounded-xl border backdrop-blur-sm z-50 animate-in slide-in-from-right-2 duration-300 shadow-xl ${getNotificationColor(notification.type)}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <span className="text-lg">{getNotificationIcon(notification.type)}</span>
           <div>
-            <div className="font-medium">{notification.title}</div>
+            <div className="font-semibold">{notification.title}</div>
             <div className="text-sm opacity-80 mt-1">{notification.message}</div>
           </div>
         </div>
@@ -216,7 +216,7 @@ const NotificationToast = ({ notification, onClose, isDarkMode }) => {
   );
 };
 
-// Account Selector Dropdown Component
+// Enhanced Account Selector Dropdown Component
 const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -250,22 +250,22 @@ const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-3 w-full p-3 rounded-lg transition-colors border ${
+        className={`flex items-center gap-3 w-full p-3 rounded-xl transition-colors border shadow-sm ${
           isDarkMode 
-            ? 'bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-800/70' 
-            : 'bg-white/80 border-gray-300/50 text-gray-900 hover:bg-gray-50/80'
+            ? 'bg-slate-800/60 border-slate-600/40 text-white hover:bg-slate-800/80 shadow-slate-900/20' 
+            : 'bg-white/80 border-gray-200/60 text-gray-900 hover:bg-white shadow-gray-900/5'
         }`}
       >
-        <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
+        <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-lg">
           {selectedAccountData.name.charAt(0)}
         </div>
         <div className="flex-1 text-left">
-          <div className="font-medium text-sm">{selectedAccountData.name}</div>
+          <div className="font-semibold text-sm">{selectedAccountData.name}</div>
           <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{selectedAccountData.email}</div>
         </div>
         <div className="flex items-center gap-2">
           {selectedAccountData.unread > 0 && (
-            <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+            <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium shadow-sm">
               {selectedAccountData.unread}
             </span>
           )}
@@ -274,10 +274,10 @@ const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
       </button>
 
       {isOpen && (
-        <div className={`absolute top-full left-0 right-0 mt-2 rounded-lg shadow-lg backdrop-blur-sm z-30 animate-in slide-in-from-top-2 duration-200 border ${
+        <div className={`absolute top-full left-0 right-0 mt-2 rounded-xl shadow-xl backdrop-blur-sm z-30 animate-in slide-in-from-top-2 duration-200 border ${
           isDarkMode 
-            ? 'bg-slate-800/90 border-slate-700/50' 
-            : 'bg-white/90 border-gray-300/50'
+            ? 'bg-slate-800/95 border-slate-600/40 shadow-slate-900/40' 
+            : 'bg-white/95 border-gray-200/60 shadow-gray-900/20'
         }`}>
           {accounts.map((account) => (
             <button
@@ -286,7 +286,7 @@ const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
                 onAccountSelect(account.id);
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center gap-3 p-3 text-left transition-colors first:rounded-t-lg last:rounded-b-lg ${
+              className={`w-full flex items-center gap-3 p-3 text-left transition-colors first:rounded-t-xl last:rounded-b-xl ${
                 selectedAccount === account.id 
                   ? 'bg-blue-500/20 text-blue-400' 
                   : isDarkMode 
@@ -298,18 +298,18 @@ const AccountSelector = ({ selectedAccount, onAccountSelect, isDarkMode }) => {
                 {account.name.charAt(0)}
               </div>
               <div className="flex-1">
-                <div className="font-medium text-sm">{account.name}</div>
+                <div className="font-semibold text-sm">{account.name}</div>
                 <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>{account.email} • {account.provider}</div>
               </div>
               {account.unread > 0 && (
-                <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-medium">
                   {account.unread}
                 </span>
               )}
             </button>
           ))}
           
-          <div className={`border-t p-2 ${isDarkMode ? 'border-slate-700/50' : 'border-gray-300/50'}`}>
+          <div className={`border-t p-2 ${isDarkMode ? 'border-slate-600/40' : 'border-gray-200/60'}`}>
             <button className={`w-full flex items-center justify-center gap-2 p-2 rounded-lg transition-colors text-sm ${
               isDarkMode 
                 ? 'text-slate-400 hover:text-white hover:bg-slate-700/50' 
@@ -345,22 +345,22 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border ${
+        className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-colors border shadow-sm ${
           isDarkMode 
-            ? 'bg-slate-800/50 border-slate-700/50 text-white hover:bg-slate-800/70' 
-            : 'bg-white/80 border-gray-300/50 text-gray-900 hover:bg-gray-50/80'
+            ? 'bg-slate-800/60 border-slate-600/40 text-white hover:bg-slate-800/80 shadow-slate-900/20' 
+            : 'bg-white/80 border-gray-200/60 text-gray-900 hover:bg-white shadow-gray-900/5'
         }`}
       >
-        <span className="font-medium">{selectedFolderData.label}</span>
-        <span className={isDarkMode ? 'text-slate-400' : 'text-gray-600'}>({selectedFolderData.count})</span>
+        <span className="font-semibold">{selectedFolderData.label}</span>
+        <span className={`${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>({selectedFolderData.count})</span>
         <ChevronDownIcon className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''} ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`} />
       </button>
 
       {isOpen && (
-        <div className={`absolute top-full left-0 mt-2 w-48 rounded-lg shadow-lg backdrop-blur-sm z-20 animate-in slide-in-from-top-2 duration-200 border ${
+        <div className={`absolute top-full left-0 mt-2 w-48 rounded-xl shadow-xl backdrop-blur-sm z-20 animate-in slide-in-from-top-2 duration-200 border ${
           isDarkMode 
-            ? 'bg-slate-800/90 border-slate-700/50' 
-            : 'bg-white/90 border-gray-300/50'
+            ? 'bg-slate-800/95 border-slate-600/40 shadow-slate-900/40' 
+            : 'bg-white/95 border-gray-200/60 shadow-gray-900/20'
         }`}>
           {folders.map((folder) => (
             <button
@@ -369,7 +369,7 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
                 onFolderSelect(folder.key);
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors first:rounded-t-lg last:rounded-b-lg ${
+              className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors first:rounded-t-xl last:rounded-b-xl ${
                 selectedFolder === folder.key 
                   ? 'bg-blue-500/20 text-blue-400' 
                   : isDarkMode 
@@ -377,7 +377,7 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
                     : 'text-gray-700 hover:bg-gray-100/50'
               }`}
             >
-              <span>{folder.label}</span>
+              <span className="font-medium">{folder.label}</span>
               <span className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>({folder.count})</span>
             </button>
           ))}
@@ -735,7 +735,7 @@ const EmailDashboard = () => {
             : 'rgba(59, 130, 246, 0.8) rgba(241, 245, 249, 0.8)'};
         }
 
-        /* Sexy gradient scrollbar for reply area */
+        /* Enhanced reply scrollbar */
         .reply-scrollbar::-webkit-scrollbar {
           width: 6px;
         }
@@ -758,14 +758,14 @@ const EmailDashboard = () => {
       `}</style>
       
       <div className="flex h-screen overflow-hidden">
-        {/* Theme Toggle */}
+        {/* Enhanced Theme Toggle */}
         <button
           onClick={() => setIsDarkMode(!isDarkMode)}
-          className={`fixed top-4 right-4 z-50 p-2 rounded-lg transition-all duration-200 ${
+          className={`fixed top-4 right-4 z-50 p-3 rounded-xl transition-all duration-200 border shadow-lg ${
             isDarkMode 
-              ? 'bg-slate-800/80 text-yellow-400 hover:bg-slate-700/80' 
-              : 'bg-white/80 text-slate-600 hover:bg-slate-100/80'
-          } backdrop-blur-sm border border-opacity-20`}
+              ? 'bg-slate-800/90 text-yellow-400 hover:bg-slate-700/90 border-slate-600/50 shadow-slate-900/50' 
+              : 'bg-white/90 text-slate-600 hover:bg-slate-100/90 border-gray-300/50 shadow-gray-500/20'
+          } backdrop-blur-sm`}
           title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
           {isDarkMode ? (
@@ -779,7 +779,7 @@ const EmailDashboard = () => {
           )}
         </button>
         
-        {/* Sidebar */}
+        {/* Enhanced Sidebar */}
         <Sidebar
           selectedCategory={selectedCategory}
           onCategorySelect={setSelectedCategory}
@@ -794,15 +794,15 @@ const EmailDashboard = () => {
 
         {/* Main Content */}
         <div className="flex-1 flex overflow-hidden">
-          {/* Email List Panel */}
+          {/* Enhanced Email List Panel */}
           <div className={`w-96 flex flex-col border-r transition-colors duration-300 ${
             isDarkMode 
-              ? 'border-slate-700/50 bg-slate-900/30' 
-              : 'border-gray-300/50 bg-white/30'
+              ? 'border-slate-600/40 bg-slate-900/40' 
+              : 'border-gray-200/60 bg-white/40'
           } backdrop-blur-sm`}>
-            {/* Header */}
+            {/* Enhanced Header */}
             <div className={`flex-shrink-0 p-4 border-b transition-colors duration-300 space-y-4 ${
-              isDarkMode ? 'border-slate-700/50' : 'border-gray-300/50'
+              isDarkMode ? 'border-slate-600/40' : 'border-gray-200/60'
             }`}>
               {/* Account Selector */}
               <AccountSelector
@@ -818,8 +818,8 @@ const EmailDashboard = () => {
                   emailCounts={emailCounts}
                   isDarkMode={isDarkMode}
                 />
-                <div className={`text-sm transition-colors duration-300 ${
-                  isDarkMode ? 'text-slate-400' : 'text-gray-600'
+                <div className={`text-sm font-medium transition-colors duration-300 ${
+                  isDarkMode ? 'text-slate-300' : 'text-gray-700'
                 }`}>
                   {filteredEmails.length} email{filteredEmails.length !== 1 ? 's' : ''}
                 </div>
@@ -838,7 +838,7 @@ const EmailDashboard = () => {
               />
             </div>
 
-            {/* Email List */}
+            {/* Enhanced Email List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar">
               <EmailList
                 emails={filteredEmails}
@@ -853,7 +853,7 @@ const EmailDashboard = () => {
             </div>
           </div>
 
-          {/* Email Detail Panel */}
+          {/* Enhanced Email Detail Panel */}
           <div className="flex-1 custom-scrollbar">
             <EmailDetail
               email={selectedEmail}
@@ -868,7 +868,7 @@ const EmailDashboard = () => {
         </div>
       </div>
 
-      {/* Modals */}
+      {/* Enhanced Modals */}
       <AnalyticsModal 
         isOpen={showAnalytics} 
         onClose={() => setShowAnalytics(false)}
@@ -882,7 +882,7 @@ const EmailDashboard = () => {
         isDarkMode={isDarkMode}
       />
 
-      {/* Notification Toast */}
+      {/* Enhanced Notification Toast */}
       {notification && (
         <NotificationToast
           notification={notification}
