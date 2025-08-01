@@ -264,7 +264,7 @@ router.post('/batch-classify', asyncHandler(async (req: Request, res: Response) 
       const classification = await aiService.classifyEmail(email);
       
       // Update email with new classification
-      email.aiCategory = classification.category;
+      email.aiCategory = classification.category as 'interested' | 'meeting_booked' | 'not_interested' | 'spam' | 'out_of_office';
       email.aiConfidence = classification.confidence;
       email.aiProcessed = true;
       email.actions.push({
@@ -290,7 +290,7 @@ router.post('/batch-classify', asyncHandler(async (req: Request, res: Response) 
         subject: email.subject.substring(0, 50) + '...'
       });
 
-    } catch (error) {
+    } catch (error: any) {
       results.push({
         emailId: email._id,
         success: false,
@@ -376,6 +376,9 @@ router.get('/insights/summary', asyncHandler(async (req: Request, res: Response)
   const totalEmails = await Email.countDocuments(filter);
   const processedEmails = insights.reduce((sum, cat) => sum + cat.count, 0);
 
+  // Generate recommendations
+  const recommendations = generateRecommendations(insights);
+
   res.json({
     success: true,
     data: {
@@ -393,14 +396,14 @@ router.get('/insights/summary', asyncHandler(async (req: Request, res: Response)
         accuracyRate: `${Math.round(insight.accuracyRate || 0)}%`,
         recentEmails: insight.recentEmails.slice(0, 3) // Last 3 recent emails
       })),
-      recommendations: this.generateRecommendations(insights),
+      recommendations,
       lastUpdated: new Date()
     }
   });
 }));
 
 // Helper function for recommendations
-function generateRecommendations(insights) {
+function generateRecommendations(insights: any[]) {
   const recommendations = [];
   
   const interestedCategory = insights.find(i => i._id === 'interested');
@@ -411,15 +414,7 @@ function generateRecommendations(insights) {
     recommendations.push({
       type: 'action',
       priority: 'high',
-      message: `${spamCategory.count} spam emails detected - consider bulk cleanup`,
-      action: 'Review and delete spam emails to keep inbox clean'
-    });
-  }
-
-  return recommendations;
-}
-
-export default router;: `You have ${interestedCategory.count} interested leads to follow up with`,
+      message: `You have ${interestedCategory.count} interested leads to follow up with`,
       action: 'Review interested emails and send personalized responses'
     });
   }
@@ -437,4 +432,12 @@ export default router;: `You have ${interestedCategory.count} interested leads t
     recommendations.push({
       type: 'cleanup',
       priority: 'medium',
-      message
+      message: `${spamCategory.count} spam emails detected - consider bulk cleanup`,
+      action: 'Review and delete spam emails to keep inbox clean'
+    });
+  }
+
+  return recommendations;
+}
+
+export default router;

@@ -72,6 +72,14 @@ export interface IEmail extends Document {
   lastActionAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  
+  // Instance Methods
+  markAsRead(): Promise<IEmail>;
+  markAsUnread(): Promise<IEmail>;
+  toggleStar(): Promise<IEmail>;
+  archive(): Promise<IEmail>;
+  restore(): Promise<IEmail>;
+  moveToFolder(targetFolder: string): Promise<IEmail>;
 }
 
 const emailSchema = new Schema({
@@ -302,8 +310,8 @@ emailSchema.index({ threadId: 1, receivedDate: -1 });
 emailSchema.index({ lastActionAt: -1 });
 
 // Text search index
-emailSchema.index({ 
-  subject: 'text', 
+emailSchema.index({
+  subject: 'text',
   textBody: 'text',
   'from.name': 'text',
   'from.address': 'text'
@@ -372,7 +380,7 @@ emailSchema.methods.restore = function() {
   return this.save();
 };
 
-emailSchema.methods.moveToFolder = function(targetFolder) {
+emailSchema.methods.moveToFolder = function(targetFolder: string) {
   this.folder = targetFolder;
   this.actions.push({ 
     type: 'move', 
@@ -468,3 +476,145 @@ draftSchema.index({ accountId: 1, updatedAt: -1 });
 draftSchema.index({ scheduledFor: 1, isScheduled: 1 });
 
 export const Draft = mongoose.model<IDraft>('Draft', draftSchema);
+
+// User Model
+export interface IUser extends Document {
+  email: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const userSchema = new Schema({
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  }
+}, {
+  timestamps: true
+});
+
+export const User = mongoose.model<IUser>('User', userSchema);
+
+// EmailAccount Model
+export interface IEmailAccount extends Document {
+  userId: string;
+  email: string;
+  provider: 'gmail' | 'outlook' | 'yahoo' | 'other';
+  displayName?: string;
+  
+  imapConfig: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string; // encrypted
+  };
+  
+  // Sync Status
+  isActive: boolean;
+  syncStatus: 'connecting' | 'connected' | 'syncing' | 'error' | 'disconnected';
+  lastSyncAt?: Date;
+  
+  // Statistics
+  syncStats?: {
+    totalEmails: number;
+    lastFetchedUid?: number;
+    errorCount: number;
+    lastError?: string;
+  };
+  
+  // Timestamps
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const emailAccountSchema = new Schema({
+  userId: {
+    type: String,
+    required: true,
+    ref: 'User',
+    index: true
+  },
+  email: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true,
+    trim: true
+  },
+  provider: {
+    type: String,
+    required: true,
+    enum: ['gmail', 'outlook', 'yahoo', 'other']
+  },
+  displayName: {
+    type: String,
+    trim: true
+  },
+  
+  imapConfig: {
+    host: {
+      type: String,
+      required: true
+    },
+    port: {
+      type: Number,
+      required: true
+    },
+    secure: {
+      type: Boolean,
+      required: true
+    },
+    user: {
+      type: String,
+      required: true
+    },
+    pass: {
+      type: String,
+      required: true
+    }
+  },
+  
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true
+  },
+  syncStatus: {
+    type: String,
+    enum: ['connecting', 'connected', 'syncing', 'error', 'disconnected'],
+    default: 'connecting',
+    index: true
+  },
+  lastSyncAt: Date,
+  
+  syncStats: {
+    totalEmails: {
+      type: Number,
+      default: 0
+    },
+    lastFetchedUid: Number,
+    errorCount: {
+      type: Number,
+      default: 0
+    },
+    lastError: String
+  }
+}, {
+  timestamps: true
+});
+
+// Indexes for performance
+emailAccountSchema.index({ userId: 1, isActive: 1 });
+emailAccountSchema.index({ syncStatus: 1, isActive: 1 });
+
+export const EmailAccount = mongoose.model<IEmailAccount>('EmailAccount', emailAccountSchema);

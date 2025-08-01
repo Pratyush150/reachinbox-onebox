@@ -279,7 +279,7 @@ export class ImapService extends EventEmitter {
           subject: parsed.subject || 'No subject',
           textBody: parsed.text || 'No text content',
           htmlBody: parsed.html || '',
-          folder: 'INBOX',
+          folder: 'inbox', // FIXED: lowercase to match enum
           isRead: attributes?.flags?.includes('\\Seen') || false,
           receivedDate: parsed.date || new Date(),
           aiProcessed: false

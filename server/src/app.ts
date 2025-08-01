@@ -73,11 +73,11 @@ app.get('/health', async (req, res) => {
         test: `${process.env.API_PREFIX || '/api/v1'}/test`
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({
       status: 'ERROR',
       timestamp: new Date().toISOString(),
-      error: error.message
+      error: error?.message || 'Unknown error'
     });
   }
 });
@@ -225,8 +225,8 @@ async function startServer() {
       logger.info(`   GET  ${apiPrefix}/accounts - Email accounts`);
       logger.info(`   POST ${apiPrefix}/test/sample-emails - Generate test data`);
     });
-  } catch (error) {
-    logger.error('Failed to start server:', error);
+  } catch (error: any) {
+    logger.error('Failed to start server:', error?.message || 'Unknown error');
     process.exit(1);
   }
 }
