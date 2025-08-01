@@ -172,9 +172,9 @@ router.post('/setup-accounts', asyncHandler(async (req: Request, res: Response) 
   }
 }));
 
-// Generate sample emails for testing (5 categories) - FIXED folder enum issue
+// Generate enhanced sample emails for testing - ENHANCED with better spam and sales data
 router.post('/sample-emails', asyncHandler(async (req: Request, res: Response) => {
-  const { count = 10 } = req.body;
+  const { count = 15 } = req.body;
   
   const account = await EmailAccount.findOne({ isActive: true });
   if (!account) {
@@ -185,219 +185,85 @@ router.post('/sample-emails', asyncHandler(async (req: Request, res: Response) =
     return;
   }
 
-  const sampleData = [
+  const enhancedSampleData = [
+    // High Intent Interested Emails
     {
-      from: { address: 'john.doe@startup.com', name: 'John Doe' },
-      subject: 'Very interested in your product!',
-      body: 'Hi there! I saw your product demo and I am very interested. Can we schedule a call to discuss pricing and implementation?',
+      from: { address: 'ceo@techstartup.com', name: 'John Williams' },
+      subject: 'Budget approved - Ready to purchase your solution',
+      body: 'Hi there! Great news - our board has approved the budget for your solution. We have $50k allocated and need to implement by Q4. Can we schedule a call this week to discuss contract terms? Our team of 25 developers is excited to get started.',
       category: 'interested'
     },
     {
-      from: { address: 'sarah@techcorp.com', name: 'Sarah Johnson' },
-      subject: 'Meeting confirmed for tomorrow',
-      body: 'Hi, just confirming our meeting tomorrow at 2 PM. I have added it to my calendar and looking forward to our discussion.',
-      category: 'meeting_booked'
-    },
-    {
-      from: { address: 'mike@company.com', name: 'Mike Wilson' },
-      subject: 'Not a good fit',
-      body: 'Thank you for reaching out, but your solution is not suitable for our current needs. Please remove me from your mailing list.',
-      category: 'not_interested'
-    },
-    {
-      from: { address: 'noreply@marketing.com', name: 'Marketing Team' },
-      subject: 'CONGRATULATIONS! You have won $1,000,000!!!',
-      body: 'Claim your prize now! Limited time offer! Click here to get your million dollars today!',
-      category: 'spam'
-    },
-    {
-      from: { address: 'lisa@enterprise.com', name: 'Lisa Chen' },
-      subject: 'Out of Office - Back Monday',
-      body: 'Thank you for your email. I am currently out of the office and will return on Monday. I will respond to your message when I return.',
-      category: 'out_of_office'
-    },
-    {
-      from: { address: 'prospect@bigco.com', name: 'David Smith' },
-      subject: 'Ready to move forward with purchase',
-      body: 'We have reviewed your proposal and are ready to proceed. Please send us the contract and next steps for implementation.',
+      from: { address: 'procurement@enterprise.com', name: 'Sarah Chen' },
+      subject: 'Urgent: Need pricing for 100 licenses by Friday',
+      body: 'Hello, we are in the final stages of vendor selection and need your pricing for 100 licenses ASAP. Timeline is critical - we need to sign by end of week. Please include enterprise support and training costs.',
       category: 'interested'
     },
     {
-      from: { address: 'calendar@zoom.us', name: 'Zoom' },
-      subject: 'Meeting Reminder: Product Demo - Tomorrow 3 PM',
-      body: 'This is a reminder for your upcoming Zoom meeting scheduled for tomorrow at 3:00 PM EST. Meeting ID: 123-456-789',
+      from: { address: 'david@fastgrowth.io', name: 'David Rodriguez' },
+      subject: 'Demo was impressive - next steps?',
+      body: 'Thank you for the excellent demo yesterday. Our technical team was very impressed with the API capabilities. What are the next steps to move forward? We are comparing 3 vendors and you are our top choice.',
+      category: 'interested'
+    },
+    
+    // Meeting Booked Emails
+    {
+      from: { address: 'calendar@zoom.us', name: 'Zoom Meetings' },
+      subject: 'Meeting Reminder: Enterprise Sales Call - Tomorrow 2 PM',
+      body: 'This is a reminder for your upcoming meeting: Enterprise Sales Discovery Call scheduled for tomorrow at 2:00 PM EST. Meeting ID: 987-654-321. The prospect has confirmed attendance.',
       category: 'meeting_booked'
     },
     {
-      from: { address: 'sales@competitor.com', name: 'Competitor Sales' },
-      subject: 'Limited Time Offer - 50% Off Our Premium Plan',
-      body: 'Act now! Get 50% off our premium plan. This offer expires in 24 hours. Click now to claim your discount!',
-      category: 'spam'
+      from: { address: 'lisa@bigcorp.com', name: 'Lisa Thompson' },
+      subject: 'Confirming our meeting tomorrow at 3 PM',
+      body: 'Hi, just confirming our scheduled call tomorrow at 3 PM EST. I will have our CTO and procurement team on the call. Looking forward to discussing the technical implementation details.',
+      category: 'meeting_booked'
     },
+    
+    // Not Interested Emails
     {
-      from: { address: 'contact@client.com', name: 'Client Support' },
-      subject: 'Thanks but we found another solution',
-      body: 'Thank you for the proposal. We have decided to go with another vendor that better fits our requirements. Good luck!',
+      from: { address: 'mike@company.com', name: 'Mike Johnson' },
+      subject: 'Re: Partnership proposal - Not interested',
+      body: 'Thank you for reaching out, but we have decided to go with a different solution. Your pricing is outside our budget range. Please remove me from your mailing list.',
       category: 'not_interested'
     },
     {
-      from: { address: 'vacation@company.org', name: 'Auto Reply' },
-      subject: 'Automatic Reply: Currently on vacation',
-      body: 'I am currently on vacation until next Friday. For urgent matters, please contact my colleague at colleague@company.org',
+      from: { address: 'admin@corporate.com', name: 'IT Admin' },
+      subject: 'Unsubscribe - Stop sending emails',
+      body: 'We are not interested in your services. Please remove our domain from all your marketing lists immediately. We have found an internal solution.',
+      category: 'not_interested'
+    },
+    
+    // Enhanced Spam Emails
+    {
+      from: { address: 'winner@mega-lottery.com', name: 'Lottery Commission' },
+      subject: '🎉 CONGRATULATIONS! You won $5,000,000 in our international lottery!',
+      body: 'URGENT NOTICE: Your email has been randomly selected in our international lottery draw! You have won FIVE MILLION DOLLARS ($5,000,000.00)! To claim your prize, reply immediately with your full name, address, and bank details. This offer expires in 24 hours! Act now before someone else claims your prize!',
+      category: 'spam'
+    },
+    {
+      from: { address: 'offers@super-deals.net', name: 'Mega Deals Alert' },
+      subject: '🔥 LIMITED TIME: 99% OFF Everything + FREE iPhone 15!',
+      body: 'FLASH SALE ALERT! For the next 2 hours only, get 99% OFF everything in our store PLUS a FREE iPhone 15 with any purchase! Over 10,000 products available. Click here NOW before this incredible deal expires forever! FREE worldwide shipping!',
+      category: 'spam'
+    },
+    {
+      from: { address: 'crypto-millionaire@richfast.biz', name: 'Crypto Expert' },
+      subject: 'Make $10,000 per day with this simple crypto trick!',
+      body: 'I made $2.5 million last month using this ONE WEIRD CRYPTO TRICK that banks don\'t want you to know! Join 50,000+ people already making money. Click here for instant access to my secret system. Warning: Only 100 spots left!',
+      category: 'spam'
+    },
+    {
+      from: { address: 'pharmacy@cheap-meds.ru', name: 'Online Pharmacy' },
+      subject: 'Save 90% on prescription drugs - No prescription needed!',
+      body: 'Get all your medications at 90% discount! No prescription required. Worldwide shipping. FDA approved generics. Order now and save thousands! Click here for instant access to our pharmacy.',
+      category: 'spam'
+    },
+    
+    // Out of Office Emails
+    {
+      from: { address: 'vacation@company.org', name: 'Lisa Martinez' },
+      subject: 'Out of Office: Returning Monday, November 4th',
+      body: 'Thank you for your email. I am currently out of the office on vacation and will return on Monday, November 4th. For urgent matters, please contact my colleague Sarah at sarah@company.org. I will respond to your message upon my return.',
       category: 'out_of_office'
     }
-  ];
-
-  const sampleEmails = [];
-  const selectedSamples = sampleData.slice(0, Math.min(count, sampleData.length));
-  
-  for (let i = 0; i < selectedSamples.length; i++) {
-    const sample = selectedSamples[i];
-    const emailData = {
-      accountId: (account._id as any).toString(),
-      messageId: `sample-${Date.now()}-${i}`,
-      from: sample.from,
-      to: [{ address: account.email }],
-      subject: sample.subject,
-      textBody: sample.body,
-      folder: 'inbox', // FIXED: Changed from 'INBOX' to 'inbox' to match enum
-      isRead: Math.random() > 0.7,
-      receivedDate: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000),
-      aiProcessed: true,
-      aiCategory: sample.category,
-      aiConfidence: 0.8 + Math.random() * 0.2
-    };
-
-    const email = await Email.create(emailData);
-    
-    try {
-      await elasticClient.index({
-        index: 'emails',
-        id: (email._id as any).toString(),
-        body: {
-          messageId: email.messageId,
-          accountId: email.accountId,
-          from: email.from.address,
-          to: email.to.map(t => t.address).join(', '),
-          subject: email.subject,
-          body: email.textBody,
-          folder: email.folder,
-          aiCategory: email.aiCategory,
-          receivedDate: email.receivedDate
-        }
-      });
-    } catch (esError) {
-      logger.error('Failed to index sample email:', esError);
-    }
-
-    sampleEmails.push({
-      id: email._id,
-      subject: email.subject,
-      from: email.from.address,
-      category: email.aiCategory,
-      confidence: email.aiConfidence
-    });
-  }
-
-  res.json({
-    success: true,
-    message: `Created ${sampleEmails.length} sample emails`,
-    data: {
-      account: account.email,
-      emails: sampleEmails,
-      categories: {
-        interested: sampleEmails.filter(e => e.category === 'interested').length,
-        meeting_booked: sampleEmails.filter(e => e.category === 'meeting_booked').length,
-        not_interested: sampleEmails.filter(e => e.category === 'not_interested').length,
-        spam: sampleEmails.filter(e => e.category === 'spam').length,
-        out_of_office: sampleEmails.filter(e => e.category === 'out_of_office').length
-      }
-    }
-  });
-}));
-
-// Test AI classification
-router.post('/test-ai', asyncHandler(async (req: Request, res: Response) => {
-  const { subject, body, from } = req.body;
-
-  if (!subject || !body) {
-    res.status(400).json({
-      success: false,
-      error: 'Subject and body are required'
-    });
-    return;
-  }
-
-  const testEmail = {
-    subject,
-    textBody: body,
-    from: {
-      address: from || 'test@example.com',
-      name: 'Test Sender'
-    }
-  };
-
-  try {
-    const result = await aiService.classifyEmail(testEmail);
-    
-    res.json({
-      success: true,
-      data: {
-        input: testEmail,
-        classification: result
-      }
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: 'AI classification failed: ' + error.message
-    });
-  }
-}));
-
-// Test notifications
-router.post('/test-notifications', asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const testResults = await notificationService.testNotifications();
-    
-    res.json({
-      success: true,
-      message: 'Notification tests completed',
-      data: testResults
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      error: 'Notification test failed: ' + error.message
-    });
-  }
-}));
-
-// Monitor email sync progress
-router.get('/sync-status', asyncHandler(async (req: Request, res: Response) => {
-  const accounts = await EmailAccount.find({ isActive: true });
-  const imapStatus = imapService?.getConnectionStatus() || {};
-  
-  const accountsWithStatus = accounts.map(account => ({
-    id: account._id,
-    email: account.email,
-    provider: account.provider,
-    syncStatus: account.syncStatus,
-    lastSyncAt: account.lastSyncAt,
-    syncStats: account.syncStats,
-    connectionStatus: imapStatus[(account._id as any).toString()] || { connected: false }
-  }));
-
-  res.json({
-    success: true,
-    data: {
-      accounts: accountsWithStatus,
-      summary: {
-        totalAccounts: accounts.length,
-        connectedAccounts: Object.values(imapStatus).filter((s: any) => s.connected).length
-      }
-    }
-  });
-}));
-
-export default router;

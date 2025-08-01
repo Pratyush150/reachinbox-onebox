@@ -1,7 +1,6 @@
 import express, { Request, Response } from 'express';
 import { Email, Draft, EmailAccount } from '../models';
 import { asyncHandler } from '../middleware/errorHandler';
-import { cleanEmailText, extractEmailSnippet } from '../utils/emailUtils';
 import Joi from 'joi';
 
 const router = express.Router();
@@ -126,22 +125,14 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
     .sort({ receivedDate: -1 })
     .limit(Number(limit))
     .skip((Number(page) - 1) * Number(limit))
-    .populate('accountId', 'email provider')
-    .lean();
-
-  // Clean email text for better display
-  const cleanedEmails = emails.map(email => ({
-    ...email,
-    textBody: cleanEmailText(email.textBody),
-    snippet: extractEmailSnippet(email.textBody)
-  }));
+    .populate('accountId', 'email provider');
 
   const total = await Email.countDocuments(filter);
 
   res.json({
     success: true,
     data: {
-      emails: cleanedEmails,
+      emails,
       searchQuery: { q, from, to, subject, body, dateFrom, dateTo, hasAttachments, aiCategory, folder },
       pagination: {
         page: Number(page),
@@ -262,19 +253,12 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     .populate('accountId', 'email provider')
     .lean();
 
-  // Clean email text for better display
-  const cleanedEmails = emails.map(email => ({
-    ...email,
-    textBody: cleanEmailText(email.textBody),
-    snippet: extractEmailSnippet(email.textBody)
-  }));
-
   const total = await Email.countDocuments(filter);
 
   res.json({
     success: true,
     data: {
-      emails: cleanedEmails,
+      emails,
       pagination: {
         page: Number(page),
         limit: Number(limit),
@@ -287,11 +271,10 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
-// GET /api/v1/emails/:id - Get single email with cleaned text
+// GET /api/v1/emails/:id - Get single email
 router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   const email = await Email.findById(req.params.id)
-    .populate('accountId', 'email provider')
-    .lean();
+    .populate('accountId', 'email provider');
   
   if (!email) {
     res.status(404).json({ 
@@ -301,14 +284,7 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  // Clean the email text
-  const cleanedEmail = {
-    ...email,
-    textBody: cleanEmailText(email.textBody),
-    snippet: extractEmailSnippet(email.textBody)
-  };
-
-  res.json({ success: true, data: cleanedEmail });
+  res.json({ success: true, data: email });
 }));
 
 // PUT /api/v1/emails/:id/read - Mark as read

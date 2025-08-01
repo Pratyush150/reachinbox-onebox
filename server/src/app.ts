@@ -1,3 +1,7 @@
+// Memory management optimized for t3.medium (4GB RAM)
+const MEMORY_LIMIT_MB = 2048; // 2GB limit (leave 2GB for system)
+const CHECK_INTERVAL = 30000; // Check every 30 seconds
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -16,6 +20,45 @@ import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 
 dotenv.config();
+
+function setupMemoryMonitoring() {
+  setInterval(() => {
+    const memUsage = process.memoryUsage();
+    const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+    const rssMB = Math.round(memUsage.rss / 1024 / 1024);
+    
+    // Log every 5 minutes
+    if (Date.now() % (5 * 60 * 1000) < CHECK_INTERVAL) {
+      console.log(`💾 Memory: ${heapUsedMB}MB heap / ${rssMB}MB total / ${MEMORY_LIMIT_MB}MB limit`);
+    }
+    
+    // Force GC at 90% of limit
+    if (heapUsedMB > MEMORY_LIMIT_MB * 0.9) {
+      logger.warn(`Memory high: ${heapUsedMB}MB, forcing GC`);
+      if (global.gc) {
+        global.gc();
+        const newUsage = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+        logger.info(`After GC: ${newUsage}MB`);
+      }
+    }
+    
+    // Restart if over limit
+    if (heapUsedMB > MEMORY_LIMIT_MB) {
+      logger.error(`Memory exceeded ${MEMORY_LIMIT_MB}MB, restarting...`);
+      process.exit(1);
+    }
+  }, CHECK_INTERVAL);
+}
+
+// Error boundaries
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error.message);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  logger.error('Unhandled Rejection:', reason?.message || reason);
+});
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5001;
@@ -53,6 +96,15 @@ app.get('/health', async (req, res) => {
     const mongoose = require('mongoose');
     const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
     
+    const memUsage = process.memoryUsage();
+    const memoryInfo = {
+      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+      rss: Math.round(memUsage.rss / 1024 / 1024),
+      limit: MEMORY_LIMIT_MB,
+      usage: `${Math.round(memUsage.heapUsed / 1024 / 1024 / MEMORY_LIMIT_MB * 100)}%`
+    };
+    
     const servicesStatus = {
       imap: 'active',
       ai: 'active',
@@ -65,6 +117,8 @@ app.get('/health', async (req, res) => {
       uptime: process.uptime(),
       environment: process.env.NODE_ENV,
       version: '1.0.0',
+      memory: memoryInfo,
+      instance: 't3.medium',
       services: {
         database: dbStatus,
         ...servicesStatus
@@ -194,12 +248,16 @@ async function startServer() {
     await connectElasticsearch();
     await initializeServices();
     
+    // Start memory monitoring
+    setupMemoryMonitoring();
+    
     app.listen(PORT, '0.0.0.0', () => {
       logger.info(`🚀 ReachInbox API Server running on port ${PORT}`);
       logger.info(`🔗 API Base: http://65.1.63.189:${PORT}${apiPrefix}`);
       logger.info(`📚 API Docs: http://65.1.63.189:${PORT}${apiPrefix}/docs`);
       logger.info(`❤️  Health Check: http://65.1.63.189:${PORT}/health`);
       logger.info(`🧪 Test APIs: http://65.1.63.189:${PORT}${apiPrefix}/test/health`);
+      logger.info(`💾 Memory Limit: ${MEMORY_LIMIT_MB}MB (t3.medium optimized)`);
       
       logger.info(`\n📋 Quick API Reference:`);
       logger.info(`   GET  ${apiPrefix}/emails - Get all emails`);

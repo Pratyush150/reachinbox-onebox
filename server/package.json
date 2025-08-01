@@ -4,9 +4,10 @@
   "description": "Backend API for ReachInbox email onebox",
   "main": "dist/app.js",
   "scripts": {
-    "dev": "nodemon src/app.ts",
+    "dev": "NODE_OPTIONS=\"--max-old-space-size=2048\" nodemon --exec \"node --expose-gc\" -r ts-node/register src/app.ts",
     "build": "tsc",
-    "start": "node dist/app.js",
+    "start": "NODE_OPTIONS=\"--max-old-space-size=2048\" node --expose-gc dist/app.js",
+    "dev-simple": "NODE_OPTIONS=\"--max-old-space-size=2048\" nodemon src/app.ts",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix"
