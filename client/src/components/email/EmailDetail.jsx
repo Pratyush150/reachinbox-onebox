@@ -16,7 +16,8 @@ import {
   LinkIcon,
   FaceSmileIcon,
   BookmarkIcon,
-  MagnifyingGlassIcon
+  MagnifyingGlassIcon,
+  EnvelopeIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 
@@ -49,25 +50,47 @@ const EmailDetail = ({
   
   const bodyRef = useRef(null);
   const fileInputRef = useRef(null);
+  const customPromptRef = useRef(null);
 
   useEffect(() => {
     setShowReply(false);
     setReplyText('');
     setReplyHtml('');
     
-    // Auto-detect best view mode
+    // FIXED: Better auto-detection of content type
     if (email?.htmlBody && email.htmlBody.length > 50) {
-      const hasRichContent = /<(?:b|i|u|strong|em|a|img|table|div|span)[^>]*>/i.test(email.htmlBody);
-      setViewMode(hasRichContent ? 'html' : 'text');
+      // Check if HTML has meaningful content beyond text
+      const hasRichContent = /<(?:b|i|u|strong|em|a|img|table|div|span|br|p)[^>]*>/i.test(email.htmlBody);
+      const htmlTextLength = email.htmlBody.replace(/<[^>]*>/g, '').length;
+      const textLength = email.textBody?.length || 0;
+      
+      // Use HTML if it has rich content OR significantly more content than text
+      if (hasRichContent || htmlTextLength > textLength * 1.2) {
+        setViewMode('html');
+      } else {
+        setViewMode('text');
+      }
     } else {
       setViewMode('text');
     }
 
-    // FIXED: Mark email as read when opened
+    // Mark email as read when opened
     if (email && !email.isRead) {
       markEmailAsRead();
     }
   }, [email]);
+
+  // Scroll custom prompt into view when opened
+  useEffect(() => {
+    if (showCustomPrompt && customPromptRef.current) {
+      setTimeout(() => {
+        customPromptRef.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+      }, 100);
+    }
+  }, [showCustomPrompt]);
 
   // Load AI insights when email is selected
   useEffect(() => {
@@ -82,11 +105,26 @@ const EmailDetail = ({
         method: 'PUT'
       });
       if (response.ok) {
-        // Update email state in parent component
         email.isRead = true;
       }
     } catch (error) {
       console.error('Failed to mark email as read:', error);
+    }
+  };
+
+  // FIXED: Add mark as unread functionality
+  const markEmailAsUnread = async () => {
+    try {
+      const response = await fetch(`http://65.1.63.189:5001/api/v1/emails/${email._id}/unread`, {
+        method: 'PUT'
+      });
+      if (response.ok) {
+        email.isRead = false;
+        // Force re-render
+        setViewMode(prev => prev);
+      }
+    } catch (error) {
+      console.error('Failed to mark email as unread:', error);
     }
   };
 
@@ -102,7 +140,7 @@ const EmailDetail = ({
     }
   };
 
-  // FIXED: Real-time AI reply generation with animation
+  // FIXED: Enhanced AI reply generation with actual LLM
   const generateAiReply = async (customPromptText = '') => {
     if (isGeneratingReply) return;
     
@@ -112,15 +150,17 @@ const EmailDetail = ({
       const requestBody = {
         emailId: email._id,
         tone: 'professional',
-        includeQuestions: true
+        includeQuestions: true,
+        useLocalLLM: true // Force using local LLM
       };
 
       if (customPromptText) {
         requestBody.customPrompt = customPromptText;
         requestBody.context = {
           subject: email.subject,
-          body: email.textBody,
-          from: email.from
+          body: getEmailContent(), // Use the actual displayed content
+          from: email.from,
+          htmlBody: email.htmlBody
         };
       }
 
@@ -132,12 +172,17 @@ const EmailDetail = ({
       
       if (response.ok) {
         const data = await response.json();
-        const generatedReply = data.data.replyOptions?.[0]?.content || data.data.generatedReply || 'Thank you for your email. I will get back to you soon.';
+        let generatedReply = data.data.replyOptions?.[0]?.content || data.data.generatedReply;
+        
+        // FIXED: Ensure we have a quality reply
+        if (!generatedReply || generatedReply.length < 20) {
+          throw new Error('LLM response too short');
+        }
         
         if (replyMode === 'rich') {
           setReplyHtml(generatedReply);
           if (bodyRef.current) {
-            bodyRef.current.innerHTML = generatedReply;
+            bodyRef.current.innerHTML = generatedReply.replace(/\n/g, '<br>');
           }
         } else {
           setReplyText(generatedReply);
@@ -145,14 +190,18 @@ const EmailDetail = ({
         
         setShowCustomPrompt(false);
         setCustomPrompt('');
+      } else {
+        throw new Error('API request failed');
       }
     } catch (error) {
       console.error('Failed to generate AI reply:', error);
-      const fallbackReply = `Hi ${email.from?.name || 'there'},\n\nThank you for your email. I'll get back to you shortly.\n\nBest regards`;
+      
+      // Show error feedback
+      const errorMessage = `Failed to generate AI reply. Please try again.`;
       if (replyMode === 'rich') {
-        setReplyHtml(fallbackReply);
+        setReplyHtml(errorMessage);
       } else {
-        setReplyText(fallbackReply);
+        setReplyText(errorMessage);
       }
     } finally {
       setIsGeneratingReply(false);
@@ -252,9 +301,25 @@ const EmailDetail = ({
       .replace(/vbscript:/gi, '');
   };
 
+  // FIXED: Better content extraction logic
+  const getEmailContent = () => {
+    if (!email) return '';
+    
+    if (viewMode === 'html' && email.htmlBody) {
+      // Convert HTML to text for better processing
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = sanitizeHtml(email.htmlBody);
+      return tempDiv.textContent || tempDiv.innerText || email.textBody || '';
+    }
+    
+    return email.textBody || '';
+  };
+
   const renderEmailContent = () => {
     if (!email) return null;
 
+    const content = getEmailContent();
+    
     if (viewMode === 'html' && email.htmlBody) {
       return (
         <div 
@@ -274,7 +339,7 @@ const EmailDetail = ({
 
     return (
       <div className={`whitespace-pre-wrap break-words ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
-        {email.textBody || 'No content'}
+        {content || 'No content'}
       </div>
     );
   };
@@ -397,6 +462,21 @@ const EmailDetail = ({
               </div>
 
               <div className="flex items-center gap-2">
+                {/* FIXED: Added Mark as Unread button */}
+                {email.isRead && (
+                  <button
+                    onClick={markEmailAsUnread}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isDarkMode
+                        ? 'text-slate-400 hover:text-blue-400 hover:bg-slate-700'
+                        : 'text-gray-400 hover:text-blue-500 hover:bg-gray-100'
+                    }`}
+                    title="Mark as unread"
+                  >
+                    <EnvelopeIcon className="w-5 h-5" />
+                  </button>
+                )}
+
                 <button
                   onClick={() => onStar(email._id || email.id)}
                   className={`p-2 rounded-lg transition-colors ${
@@ -532,9 +612,9 @@ const EmailDetail = ({
         </div>
       </div>
 
-      {/* Enhanced Reply Section */}
+      {/* FIXED: Enhanced Reply Section with better positioning */}
       {showReply && (
-        <div className={`flex-shrink-0 border-t p-4 ${
+        <div className={`flex-shrink-0 border-t p-4 max-h-[60vh] overflow-y-auto ${
           isDarkMode ? 'border-slate-600/40 bg-slate-800/20' : 'border-gray-200/60 bg-gray-50/20'
         }`}>
           <div className="mb-3">
@@ -723,43 +803,46 @@ const EmailDetail = ({
               </div>
             )}
 
-            {/* Custom AI Prompt Section */}
+            {/* FIXED: Enhanced Custom AI Prompt Section with better positioning */}
             {showCustomPrompt && (
-              <div className={`p-3 mb-3 rounded-lg border ${
+              <div ref={customPromptRef} className={`p-4 mb-3 rounded-lg border ${
                 isDarkMode ? 'border-blue-500/30 bg-blue-500/10' : 'border-blue-300/50 bg-blue-50/50'
               }`}>
-                <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center gap-2 mb-3">
                   <MagnifyingGlassIcon className="w-4 h-4 text-blue-400" />
                   <span className={`text-sm font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                     Custom AI Prompt
                   </span>
                 </div>
-                <input
-                  type="text"
+                <textarea
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
                   placeholder="e.g., 'Write a friendly follow-up about pricing' or 'Decline politely but keep door open'"
-                  className={`w-full rounded px-3 py-2 text-sm mb-2 ${
+                  className={`w-full rounded px-3 py-2 text-sm mb-3 h-20 resize-none ${
                     isDarkMode 
                       ? 'bg-slate-700 border-slate-600 text-white' 
                       : 'bg-white border-gray-300 text-gray-900'
                   }`}
-                  onKeyPress={(e) => e.key === 'Enter' && handleCustomPromptSubmit()}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      handleCustomPromptSubmit();
+                    }
+                  }}
                 />
                 <div className="flex gap-2">
                   <button
                     onClick={handleCustomPromptSubmit}
                     disabled={!customPrompt.trim() || isGeneratingReply}
-                    className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                    className="px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
-                    Generate
+                    {isGeneratingReply ? 'Generating...' : 'Generate with Qwen AI'}
                   </button>
                   <button
                     onClick={() => {
                       setShowCustomPrompt(false);
                       setCustomPrompt('');
                     }}
-                    className={`px-3 py-1 text-xs rounded ${
+                    className={`px-3 py-2 text-sm rounded-lg ${
                       isDarkMode ? 'text-slate-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
@@ -839,7 +922,7 @@ const EmailDetail = ({
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                 </div>
                 <span className={`text-sm ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-                  AI is generating your reply...
+                  Qwen AI is generating your reply...
                 </span>
               </div>
             </div>
@@ -858,19 +941,18 @@ const EmailDetail = ({
                 Cancel
               </button>
               
+              {/* FIXED: Enhanced AI Generate button with gradient */}
               <button
                 onClick={() => generateAiReply()}
                 disabled={isGeneratingReply}
-                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
                   isGeneratingReply
-                    ? 'opacity-50 cursor-not-allowed'
-                    : isDarkMode
-                      ? 'text-slate-400 hover:text-purple-400 hover:bg-slate-700'
-                      : 'text-gray-600 hover:text-purple-600 hover:bg-gray-100'
+                    ? 'opacity-50 cursor-not-allowed bg-gray-500'
+                    : 'bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 hover:from-purple-600 hover:via-pink-600 hover:to-indigo-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
                 }`}
               >
                 <SparklesIcon className="w-4 h-4" />
-                AI Generate
+                {isGeneratingReply ? 'AI Generating...' : 'AI Generate'}
               </button>
 
               <button
