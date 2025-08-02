@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   XMarkIcon, 
   StarIcon,
@@ -11,7 +11,12 @@ import {
   PaperAirplaneIcon,
   ClockIcon,
   SparklesIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  PhotoIcon,
+  LinkIcon,
+  FaceSmileIcon,
+  BookmarkIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 
@@ -28,26 +33,39 @@ const EmailDetail = ({
   const [replyHtml, setReplyHtml] = useState('');
   const [showReply, setShowReply] = useState(false);
   const [viewMode, setViewMode] = useState('auto');
-  const [replyMode, setReplyMode] = useState('rich'); // 'rich' or 'plain'
+  const [replyMode, setReplyMode] = useState('rich');
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
   const [showScheduler, setShowScheduler] = useState(false);
-  const [aiReplies, setAiReplies] = useState([]);
-  const [showAiSuggestions, setShowAiSuggestions] = useState(false);
   const [salesInsights, setSalesInsights] = useState(null);
+  const [isGeneratingReply, setIsGeneratingReply] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+  const [showCc, setShowCc] = useState(false);
+  const [showBcc, setShowBcc] = useState(false);
+  const [ccList, setCcList] = useState('');
+  const [bccList, setBccList] = useState('');
+  
+  const bodyRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     setShowReply(false);
     setReplyText('');
     setReplyHtml('');
     
-    // Auto-detect best view mode based on content
+    // Auto-detect best view mode
     if (email?.htmlBody && email.htmlBody.length > 50) {
-      // Check if HTML has meaningful content (not just plain text wrapped in HTML)
       const hasRichContent = /<(?:b|i|u|strong|em|a|img|table|div|span)[^>]*>/i.test(email.htmlBody);
       setViewMode(hasRichContent ? 'html' : 'text');
     } else {
       setViewMode('text');
+    }
+
+    // FIXED: Mark email as read when opened
+    if (email && !email.isRead) {
+      markEmailAsRead();
     }
   }, [email]);
 
@@ -57,6 +75,20 @@ const EmailDetail = ({
       loadSalesInsights();
     }
   }, [email?._id]);
+
+  const markEmailAsRead = async () => {
+    try {
+      const response = await fetch(`http://65.1.63.189:5001/api/v1/emails/${email._id}/read`, {
+        method: 'PUT'
+      });
+      if (response.ok) {
+        // Update email state in parent component
+        email.isRead = true;
+      }
+    } catch (error) {
+      console.error('Failed to mark email as read:', error);
+    }
+  };
 
   const loadSalesInsights = async () => {
     try {
@@ -70,25 +102,66 @@ const EmailDetail = ({
     }
   };
 
-  const generateAiReplies = async () => {
+  // FIXED: Real-time AI reply generation with animation
+  const generateAiReply = async (customPromptText = '') => {
+    if (isGeneratingReply) return;
+    
+    setIsGeneratingReply(true);
+    
     try {
-      setShowAiSuggestions(true);
+      const requestBody = {
+        emailId: email._id,
+        tone: 'professional',
+        includeQuestions: true
+      };
+
+      if (customPromptText) {
+        requestBody.customPrompt = customPromptText;
+        requestBody.context = {
+          subject: email.subject,
+          body: email.textBody,
+          from: email.from
+        };
+      }
+
       const response = await fetch('http://65.1.63.189:5001/api/v1/ai/generate-reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          emailId: email._id,
-          tone: 'professional',
-          includeQuestions: true
-        })
+        body: JSON.stringify(requestBody)
       });
       
       if (response.ok) {
         const data = await response.json();
-        setAiReplies(data.data.replyOptions || []);
+        const generatedReply = data.data.replyOptions?.[0]?.content || data.data.generatedReply || 'Thank you for your email. I will get back to you soon.';
+        
+        if (replyMode === 'rich') {
+          setReplyHtml(generatedReply);
+          if (bodyRef.current) {
+            bodyRef.current.innerHTML = generatedReply;
+          }
+        } else {
+          setReplyText(generatedReply);
+        }
+        
+        setShowCustomPrompt(false);
+        setCustomPrompt('');
       }
     } catch (error) {
-      console.error('Failed to generate AI replies:', error);
+      console.error('Failed to generate AI reply:', error);
+      const fallbackReply = `Hi ${email.from?.name || 'there'},\n\nThank you for your email. I'll get back to you shortly.\n\nBest regards`;
+      if (replyMode === 'rich') {
+        setReplyHtml(fallbackReply);
+      } else {
+        setReplyText(fallbackReply);
+      }
+    } finally {
+      setIsGeneratingReply(false);
+    }
+  };
+
+  const handleCustomPromptSubmit = () => {
+    if (customPrompt.trim()) {
+      generateAiReply(customPrompt.trim());
     }
   };
 
@@ -99,7 +172,10 @@ const EmailDetail = ({
       inReplyTo: email.messageId,
       references: email.messageId,
       mode: replyMode,
-      content: replyMode === 'rich' ? replyHtml : replyText
+      content: replyMode === 'rich' ? replyHtml : replyText,
+      cc: ccList ? ccList.split(',').map(e => e.trim()) : [],
+      bcc: bccList ? bccList.split(',').map(e => e.trim()) : [],
+      attachments: attachments
     };
 
     if (scheduledDate && scheduledTime) {
@@ -107,12 +183,35 @@ const EmailDetail = ({
     }
 
     onReply(email._id || email.id, replyMode === 'rich' ? replyHtml : replyText, replyData);
+    
+    // Reset form
     setReplyText('');
     setReplyHtml('');
     setShowReply(false);
     setShowScheduler(false);
     setScheduledDate('');
     setScheduledTime('');
+    setAttachments([]);
+    setCcList('');
+    setBccList('');
+    setShowCc(false);
+    setShowBcc(false);
+  };
+
+  const handleFileAttach = (event) => {
+    const files = Array.from(event.target.files);
+    const newAttachments = files.map(file => ({
+      id: Date.now() + Math.random(),
+      name: file.name,
+      size: `${(file.size / 1024).toFixed(1)} KB`,
+      type: file.type,
+      file: file
+    }));
+    setAttachments(prev => [...prev, ...newAttachments]);
+  };
+
+  const removeAttachment = (id) => {
+    setAttachments(prev => prev.filter(att => att.id !== id));
   };
 
   const formatDate = (date) => {
@@ -144,7 +243,6 @@ const EmailDetail = ({
     }
   };
 
-  // Sanitize HTML content for safe rendering
   const sanitizeHtml = (html) => {
     if (!html) return '';
     return html
@@ -165,8 +263,8 @@ const EmailDetail = ({
             __html: sanitizeHtml(email.htmlBody) 
           }}
           style={{
-            maxHeight: 'none', // Remove height limit
-            overflow: 'visible', // Allow full content
+            maxHeight: 'none',
+            overflow: 'visible',
             wordBreak: 'break-word',
             overflowWrap: 'break-word'
           }}
@@ -183,16 +281,17 @@ const EmailDetail = ({
 
   const handleFormatText = (command) => {
     document.execCommand(command, false, null);
+    if (bodyRef.current) {
+      setReplyHtml(bodyRef.current.innerHTML);
+    }
   };
 
-  const insertAiReply = (replyContent) => {
-    if (replyMode === 'rich') {
-      setReplyHtml(replyContent);
-    } else {
-      setReplyText(replyContent);
-    }
-    setShowAiSuggestions(false);
-  };
+  const formatButtons = [
+    { icon: 'B', action: 'bold', tooltip: 'Bold (Ctrl+B)' },
+    { icon: 'I', action: 'italic', tooltip: 'Italic (Ctrl+I)' },
+    { icon: 'U', action: 'underline', tooltip: 'Underline (Ctrl+U)' },
+    { icon: 'S', action: 'strikeThrough', tooltip: 'Strikethrough' }
+  ];
 
   if (!email) {
     return (
@@ -264,21 +363,6 @@ const EmailDetail = ({
                   </span>
                 )}
 
-                {/* Sales Insights Button */}
-                {salesInsights && (
-                  <button
-                    onClick={() => setShowAiSuggestions(!showAiSuggestions)}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                      isDarkMode 
-                        ? 'bg-purple-500/20 text-purple-300 hover:bg-purple-500/30' 
-                        : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
-                    }`}
-                  >
-                    <ChartBarIcon className="w-3 h-3" />
-                    Sales Insights
-                  </button>
-                )}
-
                 {/* View Mode Toggle */}
                 {email.htmlBody && (
                   <div className="flex items-center gap-1">
@@ -338,18 +422,6 @@ const EmailDetail = ({
                 </button>
 
                 <button
-                  onClick={generateAiReplies}
-                  className={`p-2 rounded-lg transition-colors ${
-                    isDarkMode
-                      ? 'text-slate-400 hover:text-purple-400 hover:bg-slate-700'
-                      : 'text-gray-400 hover:text-purple-500 hover:bg-gray-100'
-                  }`}
-                  title="Generate AI Replies"
-                >
-                  <SparklesIcon className="w-5 h-5" />
-                </button>
-
-                <button
                   onClick={() => onArchive(email._id || email.id)}
                   className={`p-2 rounded-lg transition-colors ${
                     isDarkMode
@@ -387,7 +459,7 @@ const EmailDetail = ({
         </div>
 
         {/* Sales Insights Panel */}
-        {showAiSuggestions && salesInsights && (
+        {salesInsights && (
           <div className={`mt-4 p-4 rounded-lg border ${
             isDarkMode ? 'border-slate-600/40 bg-slate-800/30' : 'border-gray-200/60 bg-gray-50/30'
           }`}>
@@ -418,20 +490,6 @@ const EmailDetail = ({
                 </div>
               </div>
             </div>
-            {salesInsights.buyingSignals?.length > 0 && (
-              <div className="mb-3">
-                <span className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>
-                  Buying Signals:
-                </span>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {salesInsights.buyingSignals.map((signal, idx) => (
-                    <span key={idx} className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded">
-                      {signal}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
             <div className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
               <strong>Next Action:</strong> {salesInsights.nextAction}
             </div>
@@ -474,39 +532,6 @@ const EmailDetail = ({
         </div>
       </div>
 
-      {/* AI Reply Suggestions */}
-      {showAiSuggestions && aiReplies.length > 0 && (
-        <div className={`flex-shrink-0 border-t p-4 ${
-          isDarkMode ? 'border-slate-600/40 bg-slate-800/20' : 'border-gray-200/60 bg-gray-50/20'
-        }`}>
-          <h4 className={`font-medium mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            🤖 AI Reply Suggestions
-          </h4>
-          <div className="space-y-2">
-            {aiReplies.map((reply, idx) => (
-              <div key={idx} className={`p-3 rounded-lg border cursor-pointer hover:opacity-80 ${
-                isDarkMode ? 'border-slate-600/40 bg-slate-700/30' : 'border-gray-200/60 bg-white/30'
-              }`}
-              onClick={() => insertAiReply(reply.content)}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-sm font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-                    {reply.title}
-                  </span>
-                  {reply.recommended && (
-                    <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded">
-                      Recommended
-                    </span>
-                  )}
-                </div>
-                <p className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
-                  {reply.content.substring(0, 100)}...
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Enhanced Reply Section */}
       {showReply && (
         <div className={`flex-shrink-0 border-t p-4 ${
@@ -546,35 +571,114 @@ const EmailDetail = ({
               </div>
             </div>
 
+            {/* CC/BCC Fields */}
+            <div className="space-y-2 mb-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowCc(!showCc)}
+                  className={`text-xs px-2 py-1 rounded ${
+                    showCc 
+                      ? 'bg-blue-500/20 text-blue-400' 
+                      : isDarkMode 
+                        ? 'text-slate-400 hover:text-white' 
+                        : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Cc
+                </button>
+                <button
+                  onClick={() => setShowBcc(!showBcc)}
+                  className={`text-xs px-2 py-1 rounded ${
+                    showBcc 
+                      ? 'bg-blue-500/20 text-blue-400' 
+                      : isDarkMode 
+                        ? 'text-slate-400 hover:text-white' 
+                        : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Bcc
+                </button>
+              </div>
+              
+              {showCc && (
+                <input
+                  type="email"
+                  value={ccList}
+                  onChange={(e) => setCcList(e.target.value)}
+                  placeholder="CC recipients (comma separated)"
+                  className={`w-full rounded px-2 py-1 text-sm ${
+                    isDarkMode 
+                      ? 'bg-slate-700 border-slate-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                />
+              )}
+              
+              {showBcc && (
+                <input
+                  type="email"
+                  value={bccList}
+                  onChange={(e) => setBccList(e.target.value)}
+                  placeholder="BCC recipients (comma separated)"
+                  className={`w-full rounded px-2 py-1 text-sm ${
+                    isDarkMode 
+                      ? 'bg-slate-700 border-slate-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                />
+              )}
+            </div>
+
             {/* Rich Text Formatting Toolbar */}
             {replyMode === 'rich' && (
-              <div className={`flex items-center gap-2 p-2 mb-2 rounded border ${
+              <div className={`flex items-center gap-4 p-2 mb-2 rounded border ${
                 isDarkMode ? 'border-slate-600/40 bg-slate-800/30' : 'border-gray-200/60 bg-gray-50/30'
               }`}>
-                <button
-                  onClick={() => handleFormatText('bold')}
-                  className={`p-1 rounded hover:bg-slate-700 text-sm font-bold ${
-                    isDarkMode ? 'text-slate-300' : 'text-gray-700'
-                  }`}
-                >
-                  B
-                </button>
-                <button
-                  onClick={() => handleFormatText('italic')}
-                  className={`p-1 rounded hover:bg-slate-700 text-sm italic ${
-                    isDarkMode ? 'text-slate-300' : 'text-gray-700'
-                  }`}
-                >
-                  I
-                </button>
-                <button
-                  onClick={() => handleFormatText('underline')}
-                  className={`p-1 rounded hover:bg-slate-700 text-sm underline ${
-                    isDarkMode ? 'text-slate-300' : 'text-gray-700'
-                  }`}
-                >
-                  U
-                </button>
+                <div className="flex items-center gap-1">
+                  {formatButtons.map((btn, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleFormatText(btn.action)}
+                      className={`w-8 h-8 flex items-center justify-center text-sm font-bold rounded transition-colors border ${
+                        isDarkMode 
+                          ? 'text-slate-300 hover:text-white hover:bg-slate-700/50 border-slate-600/50' 
+                          : 'text-gray-700 hover:text-gray-900 hover:bg-gray-200/50 border-gray-400/50'
+                      }`}
+                      title={btn.tooltip}
+                      style={{ 
+                        fontStyle: btn.action === 'italic' ? 'italic' : 'normal',
+                        textDecoration: btn.action === 'underline' ? 'underline' : btn.action === 'strikeThrough' ? 'line-through' : 'none'
+                      }}
+                    >
+                      {btn.icon}
+                    </button>
+                  ))}
+                </div>
+                
+                <div className={`w-px h-6 ${isDarkMode ? 'bg-slate-600' : 'bg-gray-400'}`} />
+                
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm border ${
+                      isDarkMode 
+                        ? 'text-slate-300 hover:text-white hover:bg-slate-700/50 border-slate-600/50' 
+                        : 'text-gray-700 hover:text-gray-900 hover:bg-gray-200/50 border-gray-400/50'
+                    }`}
+                  >
+                    <PaperClipIcon className="w-4 h-4" />
+                    Attach
+                  </button>
+                  
+                  <button className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors text-sm border ${
+                    isDarkMode 
+                      ? 'text-slate-300 hover:text-white hover:bg-slate-700/50 border-slate-600/50' 
+                      : 'text-gray-700 hover:text-gray-900 hover:bg-gray-200/50 border-gray-400/50'
+                  }`}>
+                    <LinkIcon className="w-4 h-4" />
+                    Link
+                  </button>
+                </div>
               </div>
             )}
 
@@ -618,11 +722,88 @@ const EmailDetail = ({
                 </div>
               </div>
             )}
+
+            {/* Custom AI Prompt Section */}
+            {showCustomPrompt && (
+              <div className={`p-3 mb-3 rounded-lg border ${
+                isDarkMode ? 'border-blue-500/30 bg-blue-500/10' : 'border-blue-300/50 bg-blue-50/50'
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <MagnifyingGlassIcon className="w-4 h-4 text-blue-400" />
+                  <span className={`text-sm font-medium ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                    Custom AI Prompt
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  placeholder="e.g., 'Write a friendly follow-up about pricing' or 'Decline politely but keep door open'"
+                  className={`w-full rounded px-3 py-2 text-sm mb-2 ${
+                    isDarkMode 
+                      ? 'bg-slate-700 border-slate-600 text-white' 
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                  onKeyPress={(e) => e.key === 'Enter' && handleCustomPromptSubmit()}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCustomPromptSubmit}
+                    disabled={!customPrompt.trim() || isGeneratingReply}
+                    className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                  >
+                    Generate
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCustomPrompt(false);
+                      setCustomPrompt('');
+                    }}
+                    className={`px-3 py-1 text-xs rounded ${
+                      isDarkMode ? 'text-slate-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Attachments Display */}
+            {attachments.length > 0 && (
+              <div className={`p-3 mb-3 rounded-lg border ${
+                isDarkMode ? 'border-slate-600/40 bg-slate-800/30' : 'border-gray-200/60 bg-gray-50/30'
+              }`}>
+                <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  Attachments ({attachments.length})
+                </h4>
+                <div className="space-y-2">
+                  {attachments.map((attachment) => (
+                    <div key={attachment.id} className={`flex items-center justify-between p-2 rounded ${
+                      isDarkMode ? 'bg-slate-700/50' : 'bg-white/60'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <PaperClipIcon className="w-4 h-4" />
+                        <span className="text-sm">{attachment.name}</span>
+                        <span className="text-xs opacity-60">({attachment.size})</span>
+                      </div>
+                      <button
+                        onClick={() => removeAttachment(attachment.id)}
+                        className="text-red-400 hover:text-red-300 text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Reply Input */}
           {replyMode === 'rich' ? (
             <div
+              ref={bodyRef}
               contentEditable
               onInput={(e) => setReplyHtml(e.target.innerHTML)}
               className={`w-full h-32 p-3 rounded-lg border resize-none ${
@@ -645,6 +826,24 @@ const EmailDetail = ({
               } focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
             />
           )}
+
+          {/* AI Generation Animation */}
+          {isGeneratingReply && (
+            <div className={`mt-2 p-3 rounded border ${
+              isDarkMode ? 'border-blue-500/30 bg-blue-500/10' : 'border-blue-300/50 bg-blue-50/50'
+            }`}>
+              <div className="flex items-center gap-2">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+                <span className={`text-sm ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                  AI is generating your reply...
+                </span>
+              </div>
+            </div>
+          )}
           
           <div className="flex justify-between items-center mt-3">
             <div className="flex items-center gap-2">
@@ -660,15 +859,32 @@ const EmailDetail = ({
               </button>
               
               <button
-                onClick={generateAiReplies}
+                onClick={() => generateAiReply()}
+                disabled={isGeneratingReply}
                 className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
-                  isDarkMode
-                    ? 'text-slate-400 hover:text-purple-400 hover:bg-slate-700'
-                    : 'text-gray-600 hover:text-purple-600 hover:bg-gray-100'
+                  isGeneratingReply
+                    ? 'opacity-50 cursor-not-allowed'
+                    : isDarkMode
+                      ? 'text-slate-400 hover:text-purple-400 hover:bg-slate-700'
+                      : 'text-gray-600 hover:text-purple-600 hover:bg-gray-100'
                 }`}
               >
                 <SparklesIcon className="w-4 h-4" />
-                AI Suggest
+                AI Generate
+              </button>
+
+              <button
+                onClick={() => setShowCustomPrompt(!showCustomPrompt)}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  showCustomPrompt
+                    ? 'bg-blue-500/20 text-blue-400'
+                    : isDarkMode
+                      ? 'text-slate-400 hover:text-blue-400 hover:bg-slate-700'
+                      : 'text-gray-600 hover:text-blue-600 hover:bg-gray-100'
+                }`}
+              >
+                <MagnifyingGlassIcon className="w-4 h-4" />
+                Custom Prompt
               </button>
             </div>
             
@@ -698,6 +914,16 @@ const EmailDetail = ({
               )}
             </button>
           </div>
+
+          {/* Hidden File Input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileAttach}
+            className="hidden"
+            accept="*/*"
+          />
         </div>
       )}
     </div>

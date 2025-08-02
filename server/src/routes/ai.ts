@@ -22,6 +22,7 @@ const generateReplySchema = Joi.object({
   category: Joi.string().valid('interested', 'meeting_booked', 'not_interested', 'spam', 'out_of_office'),
   tone: Joi.string().valid('professional', 'friendly', 'enthusiastic', 'brief').default('professional'),
   includeQuestions: Joi.boolean().default(true),
+  customPrompt: Joi.string().max(500), // NEW: Custom prompt support
   context: Joi.object({
     subject: Joi.string(),
     body: Joi.string(),
@@ -84,7 +85,7 @@ router.post('/classify', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
-// POST /api/v1/ai/generate-reply - Generate smart AI reply
+// POST /api/v1/ai/generate-reply - ENHANCED: Generate smart AI reply with custom prompts
 router.post('/generate-reply', asyncHandler(async (req: Request, res: Response) => {
   const { error, value } = generateReplySchema.validate(req.body);
   if (error) {
@@ -95,7 +96,7 @@ router.post('/generate-reply', asyncHandler(async (req: Request, res: Response) 
     return;
   }
 
-  const { emailId, category, tone, includeQuestions, context } = value;
+  const { emailId, category, tone, includeQuestions, customPrompt, context } = value;
 
   let emailData;
   let targetCategory = category;
@@ -126,215 +127,185 @@ router.post('/generate-reply', asyncHandler(async (req: Request, res: Response) 
 
   const startTime = Date.now();
   
-  // Generate multiple reply options
-  const replyOptions = await generateMultipleReplies(emailData, targetCategory, tone, salesAnalysis, includeQuestions);
-  
-  const processingTime = Date.now() - startTime;
+  try {
+    let generatedReply = '';
 
-  res.json({
-    success: true,
-    data: {
-      originalEmail: emailId ? {
-        id: emailId,
-        subject: emailData.subject,
-        from: emailData.from
-      } : context,
-      replyOptions,
-      salesAnalysis: {
-        confidence: salesAnalysis.confidence,
-        intent: salesAnalysis.intent,
-        urgency: salesAnalysis.urgency,
-        buyingSignals: salesAnalysis.buyingSignals,
-        nextAction: salesAnalysis.nextAction,
-        strategy: salesAnalysis.responseStrategy
-      },
-      recommendations: {
-        bestOption: replyOptions[0]?.id || 1,
-        tone: tone,
-        followUpSuggested: salesAnalysis.confidence > 30,
-        includeDemo: salesAnalysis.buyingSignals.some(signal => 
-          signal.includes('demo') || signal.includes('pricing')
-        )
-      },
-      processingTime: `${processingTime}ms`
+    // ENHANCED: Handle custom prompts
+    if (customPrompt) {
+      generatedReply = await generateCustomPromptReply(emailData, customPrompt, salesAnalysis);
+    } else {
+      // Use standard AI generation
+      generatedReply = await aiService.generateResponse(emailData, targetCategory);
     }
-  });
+
+    // If AI fails, fallback to template
+    if (!generatedReply || generatedReply.length < 10) {
+      generatedReply = generateFallbackReply(emailData, targetCategory, tone, salesAnalysis);
+    }
+
+    const processingTime = Date.now() - startTime;
+
+    res.json({
+      success: true,
+      data: {
+        originalEmail: emailId ? {
+          id: emailId,
+          subject: emailData.subject,
+          from: emailData.from
+        } : context,
+        generatedReply,
+        replyOptions: [{
+          id: 1,
+          type: customPrompt ? 'custom_prompt' : 'ai_generated',
+          title: customPrompt ? 'Custom AI Reply' : 'AI Smart Reply',
+          content: generatedReply,
+          recommended: true
+        }],
+        salesAnalysis: {
+          confidence: salesAnalysis.confidence,
+          intent: salesAnalysis.intent,
+          urgency: salesAnalysis.urgency,
+          buyingSignals: salesAnalysis.buyingSignals,
+          nextAction: salesAnalysis.nextAction,
+          strategy: salesAnalysis.responseStrategy
+        },
+        metadata: {
+          customPrompt: customPrompt || null,
+          tone,
+          category: targetCategory,
+          processingTime: `${processingTime}ms`
+        }
+      }
+    });
+  } catch (error: any) {
+    console.error('Reply generation failed:', error);
+    
+    // Always provide fallback
+    const fallbackReply = generateFallbackReply(emailData, targetCategory, tone, salesAnalysis);
+    
+    res.json({
+      success: true,
+      data: {
+        originalEmail: emailId ? { id: emailId } : context,
+        generatedReply: fallbackReply,
+        replyOptions: [{
+          id: 1,
+          type: 'fallback',
+          title: 'Standard Reply',
+          content: fallbackReply,
+          recommended: true
+        }],
+        salesAnalysis,
+        metadata: {
+          fallbackUsed: true,
+          originalError: error.message
+        }
+      }
+    });
+  }
 }));
 
-// Helper function to generate multiple reply options
-async function generateMultipleReplies(emailData: any, category: string, tone: string, salesAnalysis: any, includeQuestions: boolean) {
-  const name = emailData.from?.name || emailData.from?.address?.split('@')[0] || 'there';
-  const senderName = emailData.from?.name || 'Unknown';
+// ENHANCED: Custom prompt reply generation
+async function generateCustomPromptReply(emailData: any, customPrompt: string, salesAnalysis: any): Promise<string> {
+  const senderName = emailData.from?.name || emailData.from?.address?.split('@')[0] || 'there';
+  const subject = emailData.subject || 'your message';
   
-  const replyOptions = [];
+  // Build context for AI
+  const context = `
+Email Subject: ${subject}
+From: ${senderName}
+Content: ${emailData.textBody?.substring(0, 300) || 'No content'}
 
-  // Option 1: AI-powered smart reply
+Sales Context:
+- Purchase Intent: ${salesAnalysis.confidence}%
+- Urgency: ${salesAnalysis.urgency}
+- Buying Signals: ${salesAnalysis.buyingSignals.join(', ') || 'None detected'}
+
+User Request: ${customPrompt}
+
+Generate a professional email reply that addresses the user's specific request while being appropriate for the sales context.
+`;
+
   try {
-    const aiReply = await aiService.generateResponse(emailData, category);
-    replyOptions.push({
-      id: 1,
-      type: 'ai_generated',
-      title: 'AI Smart Reply',
-      content: aiReply,
-      recommended: true
-    });
+    // Try AI service first
+    const aiReply = await aiService.generateResponse({
+      subject: `Custom Reply: ${customPrompt}`,
+      textBody: context,
+      from: emailData.from
+    }, 'interested');
+
+    if (aiReply && aiReply.length > 20) {
+      return aiReply;
+    }
   } catch (error) {
-    // Fallback if AI fails
+    console.error('AI custom prompt failed:', error);
   }
 
-  // Option 2: Sales-focused template based on analysis
-  const salesReply = generateSalesFocusedReply(name, senderName, category, salesAnalysis, tone, includeQuestions);
-  replyOptions.push({
-    id: 2,
-    type: 'sales_optimized',
-    title: 'Sales Optimized',
-    content: salesReply,
-    recommended: salesAnalysis.confidence > 40
-  });
-
-  // Option 3: Brief professional reply
-  const briefReply = generateBriefReply(name, category, tone);
-  replyOptions.push({
-    id: 3,
-    type: 'brief_professional',
-    title: 'Brief & Professional',
-    content: briefReply,
-    recommended: false
-  });
-
-  // Option 4: Detailed follow-up (if high intent)
-  if (salesAnalysis.confidence > 50) {
-    const detailedReply = generateDetailedFollowUp(name, senderName, salesAnalysis);
-    replyOptions.push({
-      id: 4,
-      type: 'detailed_followup',
-      title: 'Detailed Follow-up',
-      content: detailedReply,
-      recommended: salesAnalysis.urgency === 'high'
-    });
-  }
-
-  return replyOptions;
+  // Fallback to template-based custom reply
+  return generateTemplateCustomReply(senderName, customPrompt, salesAnalysis);
 }
 
-function generateSalesFocusedReply(name: string, senderName: string, category: string, analysis: any, tone: string, includeQuestions: boolean): string {
-  let greeting = '';
-  let body = '';
-  let closing = '';
-  let questions = '';
-
-  // Greeting based on tone
-  switch (tone) {
-    case 'enthusiastic':
-      greeting = `Hi ${name}!`;
-      break;
-    case 'friendly':
-      greeting = `Hello ${name},`;
-      break;
-    case 'brief':
-      greeting = `Hi ${name},`;
-      break;
-    default:
-      greeting = `Dear ${name},`;
+function generateTemplateCustomReply(senderName: string, customPrompt: string, salesAnalysis: any): string {
+  const prompt = customPrompt.toLowerCase();
+  
+  // Analyze prompt for intent
+  let replyType = 'general';
+  if (prompt.includes('decline') || prompt.includes('not interested') || prompt.includes('no')) {
+    replyType = 'decline';
+  } else if (prompt.includes('pricing') || prompt.includes('cost') || prompt.includes('price')) {
+    replyType = 'pricing';
+  } else if (prompt.includes('demo') || prompt.includes('meeting') || prompt.includes('call')) {
+    replyType = 'meeting';
+  } else if (prompt.includes('follow up') || prompt.includes('check in')) {
+    replyType = 'followup';
+  } else if (prompt.includes('friendly') || prompt.includes('casual')) {
+    replyType = 'friendly';
   }
 
-  // Questions based on buying signals
-  if (includeQuestions && analysis.confidence > 30) {
-    const questionOptions = [];
-    
-    if (analysis.buyingSignals.some((s: string) => s.includes('budget'))) {
-      questionOptions.push('What budget range are you working with?');
-    }
-    if (analysis.buyingSignals.some((s: string) => s.includes('timeline'))) {
-      questionOptions.push('What\'s your ideal timeline for implementation?');
-    }
-    if (analysis.buyingSignals.some((s: string) => s.includes('team'))) {
-      questionOptions.push('How large is your team?');
-    }
-    
-    if (questionOptions.length > 0) {
-      questions = '\n\nA few quick questions to help me provide the best solution:\n• ' + questionOptions.slice(0, 2).join('\n• ');
-    }
-  }
-
-  // Body based on category and intent
-  switch (category) {
-    case 'interested':
-      if (analysis.confidence > 60) {
-        body = `Thank you for your interest! I'm excited to help you achieve your goals. Based on what you've shared, I believe we can deliver significant value to your organization.`;
-        if (analysis.urgency === 'high') {
-          body += `\n\nI understand this is time-sensitive. Let me fast-track this for you - I can have a custom proposal ready within 24 hours.`;
-        } else {
-          body += `\n\nI'd love to schedule a 15-minute call to understand your specific needs and show you exactly how we can help.`;
-        }
-      } else {
-        body = `Thank you for reaching out! I'd be happy to provide more information about how we can help your business grow.`;
-      }
-      break;
-      
-    case 'meeting_booked':
-      body = `Perfect! I've confirmed our meeting and I'm looking forward to our conversation.`;
-      if (analysis.buyingSignals.length > 0) {
-        body += ` I'll prepare some specific examples and case studies that align with your needs.`;
-      }
-      break;
-      
-    case 'not_interested':
-      body = `I completely understand. Thank you for taking the time to let me know.`;
-      if (tone !== 'brief') {
-        body += ` If anything changes in the future, please don't hesitate to reach out.`;
-      }
-      break;
-      
-    default:
-      body = `Thank you for your email. I'll make sure to address your inquiry promptly.`;
-  }
-
-  // Closing based on tone and intent
-  if (category === 'not_interested') {
-    closing = `\nBest wishes,`;
-  } else if (analysis.confidence > 40) {
-    closing = tone === 'brief' ? `\nBest regards,` : `\nLooking forward to hearing from you!\n\nBest regards,`;
-  } else {
-    closing = `\nBest regards,`;
-  }
-
-  return `${greeting}\n\n${body}${questions}${closing}`;
-}
-
-function generateBriefReply(name: string, category: string, tone: string): string {
   const templates = {
-    interested: `Hi ${name},\n\nThank you for your interest! I'd be happy to schedule a brief call to discuss how we can help.\n\nBest regards,`,
-    meeting_booked: `Hi ${name},\n\nMeeting confirmed. Looking forward to speaking with you.\n\nBest regards,`,
-    not_interested: `Hi ${name},\n\nUnderstood. Thank you for letting me know.\n\nBest regards,`,
-    default: `Hi ${name},\n\nThank you for your email. I'll respond with more details shortly.\n\nBest regards,`
+    decline: `Hi ${senderName},\n\nThank you for your interest. While this isn't the right fit for us at the moment, I appreciate you reaching out.\n\nIf anything changes in the future, please don't hesitate to contact us again.\n\nBest regards`,
+    
+    pricing: `Hi ${senderName},\n\nThank you for your inquiry about pricing. I'd be happy to provide you with detailed pricing information.\n\nTo ensure I give you the most accurate quote, could you share:\n• Your team size\n• Your specific requirements\n• Your preferred timeline\n\nI'll prepare a customized proposal for you.\n\nBest regards`,
+    
+    meeting: `Hi ${senderName},\n\nThank you for your interest! I'd love to schedule a demo to show you exactly how our solution can help.\n\nI have availability:\n• Tuesday 2-4 PM\n• Wednesday 10 AM-12 PM\n• Thursday 1-3 PM\n\nWhich works best for you?\n\nBest regards`,
+    
+    followup: `Hi ${senderName},\n\nI wanted to follow up on our previous conversation and see if you had any questions.\n\nBased on what you shared, I think our solution could really help with ${salesAnalysis.buyingSignals[0] || 'your goals'}.\n\nWould you like to schedule a brief call to discuss next steps?\n\nBest regards`,
+    
+    friendly: `Hi ${senderName}!\n\nThanks for reaching out! It's great to hear from you.\n\n${salesAnalysis.confidence > 50 ? 'I\'m excited about the possibility of working together.' : 'I\'d love to learn more about how we can help.'}\n\nLet me know what questions you have!\n\nCheers`,
+    
+    general: `Hi ${senderName},\n\nThank you for your email. I appreciate you taking the time to reach out.\n\n${salesAnalysis.confidence > 40 ? 'Based on what you\'ve shared, I believe we can provide significant value.' : 'I\'d be happy to provide more information about our solution.'}\n\nPlease let me know if you have any questions.\n\nBest regards`
   };
-  
-  return templates[category as keyof typeof templates] || templates.default;
+
+  return templates[replyType as keyof typeof templates] || templates.general;
 }
 
-function generateDetailedFollowUp(name: string, senderName: string, analysis: any): string {
-  let content = `Dear ${name},\n\n`;
+function generateFallbackReply(emailData: any, category: string, tone: string, salesAnalysis: any): string {
+  const name = emailData.from?.name || emailData.from?.address?.split('@')[0] || 'there';
   
-  content += `Thank you for expressing interest in our solution! Based on your inquiry, I can see this could be a great fit for your needs.\n\n`;
-  
-  if (analysis.buyingSignals.length > 0) {
-    content += `I noticed you mentioned ${analysis.buyingSignals.slice(0, 2).join(' and ').toLowerCase()}. This tells me you're serious about finding the right solution.\n\n`;
+  const templates = {
+    interested: {
+      professional: `Dear ${name},\n\nThank you for your interest in our solution. I'd be happy to schedule a call to discuss how we can help achieve your goals.\n\nBest regards`,
+      friendly: `Hi ${name}!\n\nThanks for reaching out! I'd love to chat about how we can help you out.\n\nLooking forward to connecting!\n\nBest`,
+      brief: `Hi ${name},\n\nThanks for your interest. Let's schedule a quick call to discuss.\n\nBest regards`
+    },
+    meeting_booked: {
+      professional: `Dear ${name},\n\nThank you for confirming our meeting. I look forward to our discussion and will prepare relevant materials.\n\nBest regards`,
+      friendly: `Hi ${name}!\n\nAwesome, looking forward to our chat! I'll prepare some great stuff to show you.\n\nTalk soon!`,
+      brief: `Hi ${name},\n\nMeeting confirmed. Looking forward to it.\n\nBest regards`
+    },
+    not_interested: {
+      professional: `Dear ${name},\n\nI understand and appreciate you letting me know. If anything changes in the future, please feel free to reach out.\n\nBest regards`,
+      friendly: `Hi ${name},\n\nNo worries at all! Thanks for being upfront. Feel free to reach out if anything changes.\n\nBest`,
+      brief: `Hi ${name},\n\nUnderstood. Thanks for letting me know.\n\nBest regards`
+    }
+  };
+
+  const categoryTemplates = templates[category as keyof typeof templates];
+  if (categoryTemplates) {
+    return categoryTemplates[tone as keyof typeof categoryTemplates] || categoryTemplates.professional;
   }
-  
-  content += `Here's what I'd like to propose:\n\n`;
-  content += `1. A 15-minute discovery call to understand your specific requirements\n`;
-  content += `2. A personalized demo showing exactly how we solve your challenges\n`;
-  content += `3. A custom proposal with pricing tailored to your needs\n\n`;
-  
-  if (analysis.urgency === 'high') {
-    content += `Since timing seems important, I can prioritize this and have everything ready within 48 hours.\n\n`;
-  }
-  
-  content += `Would you be available for a brief call this week? I have openings Tuesday and Thursday afternoon.\n\n`;
-  content += `Looking forward to helping you achieve your goals!\n\nBest regards,`;
-  
-  return content;
+
+  return `Hi ${name},\n\nThank you for your email. I'll get back to you shortly.\n\nBest regards`;
 }
 
 // GET /api/v1/ai/sales-insights/:emailId - Get detailed sales insights for an email

@@ -27,27 +27,18 @@ const apiService = {
     return data.success ? data.data : {};
   },
 
-  // NEW: Fetch category-specific counts
-  async fetchCategoryCounts() {
-    try {
-      const response = await fetch(`${API_BASE}/emails/stats`);
-      const data = await response.json();
-      if (data.success) {
-        return {
-          folders: data.data.folders || {},
-          categories: data.data.categories || {},
-          status: data.data.status || {}
-        };
-      }
-    } catch (error) {
-      console.error('Failed to fetch category counts:', error);
-    }
-    return { folders: {}, categories: {}, status: {} };
-  },
-
+  // FIXED: Enhanced mark email as read with local state update
   async markEmailRead(emailId) {
     const response = await fetch(`${API_BASE}/emails/${emailId}/read`, { method: 'PUT' });
-    return response.json();
+    const result = await response.json();
+    return result;
+  },
+
+  // FIXED: Enhanced mark email as unread
+  async markEmailUnread(emailId) {
+    const response = await fetch(`${API_BASE}/emails/${emailId}/unread`, { method: 'PUT' });
+    const result = await response.json();
+    return result;
   },
 
   async bulkAction(action, emailIds) {
@@ -63,6 +54,25 @@ const apiService = {
     const response = await fetch(`${API_BASE}/emails/search?q=${encodeURIComponent(query)}`);
     const data = await response.json();
     return data.success ? data.data.emails : [];
+  },
+
+  async starEmail(emailId) {
+    const response = await fetch(`${API_BASE}/emails/${emailId}/star`, { method: 'PUT' });
+    return response.json();
+  },
+
+  async archiveEmail(emailId) {
+    const response = await fetch(`${API_BASE}/emails/${emailId}/archive`, { method: 'PUT' });
+    return response.json();
+  },
+
+  async deleteEmail(emailId) {
+    const response = await fetch(`${API_BASE}/emails/bulk-actions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', emailIds: [emailId] })
+    });
+    return response.json();
   }
 };
 
@@ -330,7 +340,7 @@ const EmailDashboard = () => {
       setIsLoading(true);
       try {
         const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150);
-        const stats = await apiService.fetchCategoryCounts(); // FIXED: Use new method
+        const stats = await apiService.fetchEmailStats();
         
         setEmails(fetchedEmails);
         setEmailStats(stats);
@@ -483,21 +493,46 @@ const EmailDashboard = () => {
     setActiveFilters(filters);
   }, []);
 
+  // FIXED: Enhanced email select with proper read marking
   const handleEmailSelect = useCallback(async (emailId) => {
     setSelectedEmailId(emailId);
 
-    // Mark email as read via API
-    try {
-      await apiService.markEmailRead(emailId);
-      setEmails(prevEmails =>
-        prevEmails.map(email =>
-          (email._id === emailId || email.id === emailId) ? { ...email, isRead: true } : email
-        )
-      );
-    } catch (error) {
-      console.error('Failed to mark email as read:', error);
+    // Find the email in our local state
+    const email = emails.find(e => e._id === emailId || e.id === emailId);
+    
+    // Mark email as read via API if it's unread
+    if (email && !email.isRead) {
+      try {
+        const result = await apiService.markEmailRead(emailId);
+        if (result.success) {
+          // Update local state immediately for responsive UI
+          setEmails(prevEmails =>
+            prevEmails.map(email =>
+              (email._id === emailId || email.id === emailId) 
+                ? { ...email, isRead: true } 
+                : email
+            )
+          );
+          
+          // Update email stats to reflect the change
+          setEmailStats(prevStats => ({
+            ...prevStats,
+            status: {
+              ...prevStats.status,
+              unread: Math.max(0, (prevStats.status?.unread || 0) - 1)
+            }
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to mark email as read:', error);
+        setNotification({
+          type: 'error',
+          title: 'Error',
+          message: 'Failed to mark email as read'
+        });
+      }
     }
-  }, []);
+  }, [emails]);
 
   const handleBulkAction = useCallback(async (action, emailIds) => {
     try {
@@ -506,7 +541,7 @@ const EmailDashboard = () => {
       if (result.success) {
         // Reload emails to reflect changes
         const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150);
-        const stats = await apiService.fetchCategoryCounts();
+        const stats = await apiService.fetchEmailStats();
         setEmails(fetchedEmails);
         setEmailStats(stats);
         
@@ -527,6 +562,7 @@ const EmailDashboard = () => {
     }
   }, [selectedCategory]);
 
+  // FIXED: Enhanced email actions with local state updates
   const handleEmailAction = useCallback(async (action, emailId, data = null) => {
     if (!emailId || emailId === 'undefined') {
       console.error('Invalid email ID:', emailId);
@@ -534,16 +570,23 @@ const EmailDashboard = () => {
     }
 
     try {
-      let apiAction;
+      let result;
+      
       switch (action) {
         case 'star':
-          apiAction = `${API_BASE}/emails/${emailId}/star`;
+          result = await apiService.starEmail(emailId);
           break;
         case 'archive':
-          apiAction = `${API_BASE}/emails/${emailId}/archive`;
+          result = await apiService.archiveEmail(emailId);
           break;
         case 'delete':
-          apiAction = 'delete'; // Use bulk action
+          result = await apiService.deleteEmail(emailId);
+          break;
+        case 'markRead':
+          result = await apiService.markEmailRead(emailId);
+          break;
+        case 'markUnread':
+          result = await apiService.markEmailUnread(emailId);
           break;
         case 'reply':
           // Handle reply functionality
@@ -558,27 +601,53 @@ const EmailDashboard = () => {
           return;
       }
 
-      if (action === 'delete') {
-        await apiService.bulkAction('delete', [emailId]);
-      } else {
-        await fetch(apiAction, { method: 'PUT' });
+      if (result?.success) {
+        // Update local state immediately for responsive UI
+        setEmails(prevEmails => {
+          return prevEmails.map(email => {
+            if (email._id === emailId || email.id === emailId) {
+              const updatedEmail = { ...email };
+              
+              switch (action) {
+                case 'star':
+                  updatedEmail.isStarred = !email.isStarred;
+                  break;
+                case 'archive':
+                  updatedEmail.isArchived = true;
+                  updatedEmail.folder = 'archive';
+                  break;
+                case 'delete':
+                  updatedEmail.folder = 'deleted';
+                  break;
+                case 'markRead':
+                  updatedEmail.isRead = true;
+                  break;
+                case 'markUnread':
+                  updatedEmail.isRead = false;
+                  break;
+              }
+              
+              return updatedEmail;
+            }
+            return email;
+          });
+        });
+
+        // Clear selected email if it was archived or deleted
+        if (['archive', 'delete'].includes(action) && selectedEmailId === emailId) {
+          setSelectedEmailId(null);
+        }
+
+        // Update stats
+        const stats = await apiService.fetchEmailStats();
+        setEmailStats(stats);
+
+        setNotification({
+          type: 'success',
+          title: `Email ${action}d`,
+          message: `Email ${action} completed successfully`
+        });
       }
-
-      // Reload emails and stats
-      const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150);
-      const stats = await apiService.fetchCategoryCounts();
-      setEmails(fetchedEmails);
-      setEmailStats(stats);
-
-      if (['archive', 'delete'].includes(action) && selectedEmailId === emailId) {
-        setSelectedEmailId(null);
-      }
-
-      setNotification({
-        type: 'success',
-        title: `Email ${action}d`,
-        message: `Email ${action} completed successfully`
-      });
     } catch (error) {
       setNotification({
         type: 'error',
@@ -586,7 +655,7 @@ const EmailDashboard = () => {
         message: error.message
       });
     }
-  }, [selectedEmailId, selectedCategory]);
+  }, [selectedEmailId]);
 
   const handleComposeSend = useCallback((emailData) => {
     setNotification({
