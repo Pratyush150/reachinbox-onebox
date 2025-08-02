@@ -33,17 +33,18 @@ const Sidebar = ({
   onShowAnalytics,
   onShowNotifications,
   onShowCompose,
-  emailStats,
+  emailStats, // FIXED: Now receives correctly structured data
   isDarkMode = true
 }) => {
   const [hoveredCategory, setHoveredCategory] = useState(null);
 
+  // FIXED: Use the correct structure for counts
   const folderCategories = [
     { 
       key: 'inbox', 
       label: 'Inbox', 
       icon: InboxIcon, 
-      count: emailStats?.total || 0,
+      count: emailStats?.folders?.inbox || emailStats?.total || 0, // Fallback for backward compatibility
       color: isDarkMode ? 'text-slate-300' : 'text-gray-700',
       description: 'All incoming emails'
     },
@@ -51,7 +52,7 @@ const Sidebar = ({
       key: 'sent', 
       label: 'Sent', 
       icon: PaperAirplaneIcon, 
-      count: 8,
+      count: emailStats?.folders?.sent || 0,
       color: isDarkMode ? 'text-blue-300' : 'text-blue-700',
       description: 'Sent emails'
     },
@@ -59,7 +60,7 @@ const Sidebar = ({
       key: 'drafts', 
       label: 'Drafts', 
       icon: DocumentIcon, 
-      count: 3,
+      count: emailStats?.folders?.drafts || 0,
       color: isDarkMode ? 'text-yellow-300' : 'text-yellow-700',
       description: 'Draft emails'
     },
@@ -67,7 +68,7 @@ const Sidebar = ({
       key: 'scheduled', 
       label: 'Scheduled', 
       icon: ClockIcon, 
-      count: emailStats?.scheduled || 2,
+      count: emailStats?.folders?.scheduled || 0,
       color: isDarkMode ? 'text-purple-300' : 'text-purple-700',
       description: 'Scheduled emails'
     },
@@ -75,7 +76,7 @@ const Sidebar = ({
       key: 'archive', 
       label: 'Archive', 
       icon: ArchiveBoxIcon, 
-      count: 156,
+      count: emailStats?.folders?.archive || 0,
       color: isDarkMode ? 'text-green-300' : 'text-green-700',
       description: 'Archived emails'
     },
@@ -83,7 +84,7 @@ const Sidebar = ({
       key: 'deleted', 
       label: 'Deleted', 
       icon: TrashIcon, 
-      count: 12,
+      count: emailStats?.folders?.deleted || 0,
       color: isDarkMode ? 'text-red-300' : 'text-red-700',
       description: 'Deleted emails'
     }
@@ -94,7 +95,7 @@ const Sidebar = ({
       key: 'all', 
       label: 'All Categories', 
       icon: FunnelIcon, 
-      count: emailStats?.total || 0,
+      count: emailStats?.status?.total || 0,
       color: isDarkMode ? 'text-slate-300' : 'text-gray-700',
       bgColor: isDarkMode ? 'bg-slate-700/30 border-slate-600/40' : 'bg-gray-100/80 border-gray-300/60',
       description: 'View all AI categories'
@@ -104,7 +105,7 @@ const Sidebar = ({
       label: 'Interested', 
       icon: BoltIcon, 
       solidIcon: BoltSolid,
-      count: emailStats?.interested || 0,
+      count: emailStats?.categories?.interested || 0, // FIXED: Use categories object
       color: isDarkMode ? 'text-emerald-300' : 'text-emerald-700',
       bgColor: isDarkMode ? 'bg-emerald-500/15 border-emerald-400/30' : 'bg-emerald-50 border-emerald-200',
       description: 'Buying intent detected'
@@ -114,7 +115,7 @@ const Sidebar = ({
       label: 'Meetings', 
       icon: CalendarIcon,
       solidIcon: CalendarSolid,
-      count: emailStats?.meeting_booked || 0,
+      count: emailStats?.categories?.meeting_booked || 0, // FIXED: Use categories object
       color: isDarkMode ? 'text-blue-300' : 'text-blue-700',
       bgColor: isDarkMode ? 'bg-blue-500/15 border-blue-400/30' : 'bg-blue-50 border-blue-200',
       description: 'Scheduled meetings'
@@ -123,7 +124,7 @@ const Sidebar = ({
       key: 'not_interested', 
       label: 'Not Interested', 
       icon: NoSymbolIcon, 
-      count: emailStats?.not_interested || 0,
+      count: emailStats?.categories?.not_interested || 0, // FIXED: Use categories object
       color: isDarkMode ? 'text-red-300' : 'text-red-700',
       bgColor: isDarkMode ? 'bg-red-500/15 border-red-400/30' : 'bg-red-50 border-red-200',
       description: 'Declined proposals'
@@ -133,7 +134,7 @@ const Sidebar = ({
       label: 'Spam', 
       icon: ExclamationTriangleIcon,
       solidIcon: ExclamationSolid,
-      count: emailStats?.spam || 0,
+      count: emailStats?.categories?.spam || 0, // FIXED: Use categories object
       color: isDarkMode ? 'text-orange-300' : 'text-orange-700',
       bgColor: isDarkMode ? 'bg-orange-500/15 border-orange-400/30' : 'bg-orange-50 border-orange-200',
       description: 'Promotional emails'
@@ -142,7 +143,7 @@ const Sidebar = ({
       key: 'out_of_office', 
       label: 'Out of Office', 
       icon: ClockIcon, 
-      count: emailStats?.out_of_office || 0,
+      count: emailStats?.categories?.out_of_office || 0, // FIXED: Use categories object
       color: isDarkMode ? 'text-purple-300' : 'text-purple-700',
       bgColor: isDarkMode ? 'bg-purple-500/15 border-purple-400/30' : 'bg-purple-50 border-purple-200',
       description: 'Auto-reply messages'
@@ -164,7 +165,7 @@ const Sidebar = ({
       icon: BellIcon,
       onClick: onShowNotifications,
       color: isDarkMode ? 'text-yellow-300' : 'text-yellow-700',
-      hasNotification: true,
+      hasNotification: (emailStats?.categories?.interested || 0) > 0 || (emailStats?.categories?.meeting_booked || 0) > 0,
       description: 'View notifications'
     },
     {
@@ -315,7 +316,7 @@ const Sidebar = ({
           </button>
         </div>
 
-        {/* Quick Stats - Enhanced */}
+        {/* Quick Stats - Enhanced with FIXED counts */}
         {!isCollapsed && (
           <div className={`flex-shrink-0 px-4 pb-4 border-b ${
             isDarkMode ? 'border-slate-600/40' : 'border-gray-300/40'
@@ -329,7 +330,7 @@ const Sidebar = ({
                 <div className={`text-xl font-bold ${
                   isDarkMode ? 'text-white' : 'text-gray-900'
                 }`}>
-                  {(emailStats?.total || 0).toLocaleString()}
+                  {(emailStats?.status?.total || 0).toLocaleString()}
                 </div>
                 <div className={`text-xs ${
                   isDarkMode ? 'text-slate-400' : 'text-gray-600'
@@ -345,7 +346,7 @@ const Sidebar = ({
                 <div className={`text-xl font-bold ${
                   isDarkMode ? 'text-blue-300' : 'text-blue-700'
                 }`}>
-                  {emailStats?.unread || 0}
+                  {emailStats?.status?.unread || 0}
                 </div>
                 <div className={`text-xs ${
                   isDarkMode ? 'text-blue-400' : 'text-blue-600'

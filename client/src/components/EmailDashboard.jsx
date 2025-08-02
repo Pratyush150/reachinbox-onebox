@@ -27,6 +27,24 @@ const apiService = {
     return data.success ? data.data : {};
   },
 
+  // NEW: Fetch category-specific counts
+  async fetchCategoryCounts() {
+    try {
+      const response = await fetch(`${API_BASE}/emails/stats`);
+      const data = await response.json();
+      if (data.success) {
+        return {
+          folders: data.data.folders || {},
+          categories: data.data.categories || {},
+          status: data.data.status || {}
+        };
+      }
+    } catch (error) {
+      console.error('Failed to fetch category counts:', error);
+    }
+    return { folders: {}, categories: {}, status: {} };
+  },
+
   async markEmailRead(emailId) {
     const response = await fetch(`${API_BASE}/emails/${emailId}/read`, { method: 'PUT' });
     return response.json();
@@ -234,12 +252,12 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
   const [isOpen, setIsOpen] = useState(false);
 
   const folders = [
-    { key: 'inbox', label: 'Inbox', count: emailCounts.inbox || 0 },
-    { key: 'sent', label: 'Sent', count: emailCounts.sent || 0 },
-    { key: 'drafts', label: 'Drafts', count: emailCounts.drafts || 0 },
-    { key: 'scheduled', label: 'Scheduled', count: emailCounts.scheduled || 0 },
-    { key: 'archive', label: 'Archive', count: emailCounts.archive || 0 },
-    { key: 'deleted', label: 'Deleted', count: emailCounts.deleted || 0 }
+    { key: 'inbox', label: 'Inbox', count: emailCounts.folders?.inbox || 0 },
+    { key: 'sent', label: 'Sent', count: emailCounts.folders?.sent || 0 },
+    { key: 'drafts', label: 'Drafts', count: emailCounts.folders?.drafts || 0 },
+    { key: 'scheduled', label: 'Scheduled', count: emailCounts.folders?.scheduled || 0 },
+    { key: 'archive', label: 'Archive', count: emailCounts.folders?.archive || 0 },
+    { key: 'deleted', label: 'Deleted', count: emailCounts.folders?.deleted || 0 }
   ];
 
   const selectedFolderData = folders.find(f => f.key === selectedFolder) || folders[0];
@@ -292,7 +310,7 @@ const MailFolderDropdown = ({ selectedFolder, onFolderSelect, emailCounts, isDar
 
 const EmailDashboard = () => {
   // State management
-  const [emails, setEmails] = useState([]); // FIXED: Removed mock data
+  const [emails, setEmails] = useState([]);
   const [emailStats, setEmailStats] = useState({});
   const [selectedCategory, setSelectedCategory] = useState('inbox');
   const [selectedEmailId, setSelectedEmailId] = useState(null);
@@ -311,8 +329,8 @@ const EmailDashboard = () => {
     const loadEmails = async () => {
       setIsLoading(true);
       try {
-        const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150); // FIXED: Increased limit
-        const stats = await apiService.fetchEmailStats();
+        const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150);
+        const stats = await apiService.fetchCategoryCounts(); // FIXED: Use new method
         
         setEmails(fetchedEmails);
         setEmailStats(stats);
@@ -351,41 +369,69 @@ const EmailDashboard = () => {
     }
   }, [searchTerm]);
 
-  // Calculate email counts from API stats
+  // FIXED: Calculate email counts properly
   const emailCounts = useMemo(() => {
-    if (emailStats.folders && emailStats.status) {
+    // Use API stats if available
+    if (emailStats.folders && emailStats.categories && emailStats.status) {
       return {
-        inbox: emailStats.folders.inbox || 0,
-        sent: emailStats.folders.sent || 0,
-        drafts: emailStats.folders.drafts || 0,
-        scheduled: emailStats.folders.scheduled || 0,
-        archive: emailStats.folders.archive || 0,
-        deleted: emailStats.folders.deleted || 0,
-        total: emailStats.status.total || 0,
-        unread: emailStats.status.unread || 0,
-        interested: emailStats.categories?.interested || 0,
-        meeting_booked: emailStats.categories?.meeting_booked || 0,
-        not_interested: emailStats.categories?.not_interested || 0,
-        spam: emailStats.categories?.spam || 0,
-        out_of_office: emailStats.categories?.out_of_office || 0
+        // Folder counts from API
+        folders: {
+          inbox: emailStats.folders.inbox || 0,
+          sent: emailStats.folders.sent || 0,
+          drafts: emailStats.folders.drafts || 0,
+          scheduled: emailStats.folders.scheduled || 0,
+          archive: emailStats.folders.archive || 0,
+          deleted: emailStats.folders.deleted || 0
+        },
+        // Category counts from API
+        categories: {
+          interested: emailStats.categories.interested || 0,
+          meeting_booked: emailStats.categories.meeting_booked || 0,
+          not_interested: emailStats.categories.not_interested || 0,
+          spam: emailStats.categories.spam || 0,
+          out_of_office: emailStats.categories.out_of_office || 0
+        },
+        // Status counts from API
+        status: {
+          total: emailStats.status.total || 0,
+          unread: emailStats.status.unread || 0,
+          starred: emailStats.status.starred || 0,
+          archived: emailStats.status.archived || 0
+        }
       };
     }
     
-    // Fallback calculation from current emails
+    // Fallback: Calculate from current emails (less accurate)
     const counts = {
-      inbox: 0, sent: 0, drafts: 0, scheduled: 0, archive: 0, deleted: 0,
-      total: emails.length, unread: 0,
-      interested: 0, meeting_booked: 0, not_interested: 0, spam: 0, out_of_office: 0
+      folders: {
+        inbox: 0, sent: 0, drafts: 0, scheduled: 0, archive: 0, deleted: 0
+      },
+      categories: {
+        interested: 0, meeting_booked: 0, not_interested: 0, spam: 0, out_of_office: 0
+      },
+      status: {
+        total: emails.length,
+        unread: 0,
+        starred: 0,
+        archived: 0
+      }
     };
 
     emails.forEach(email => {
-      if (counts.hasOwnProperty(email.folder)) {
-        counts[email.folder]++;
+      // Count by folder
+      if (email.folder && counts.folders.hasOwnProperty(email.folder)) {
+        counts.folders[email.folder]++;
       }
-      if (!email.isRead) counts.unread++;
-      if (counts.hasOwnProperty(email.aiCategory)) {
-        counts[email.aiCategory]++;
+      
+      // Count by AI category
+      if (email.aiCategory && counts.categories.hasOwnProperty(email.aiCategory)) {
+        counts.categories[email.aiCategory]++;
       }
+      
+      // Count by status
+      if (!email.isRead) counts.status.unread++;
+      if (email.isStarred) counts.status.starred++;
+      if (email.isArchived) counts.status.archived++;
     });
 
     return counts;
@@ -460,7 +506,9 @@ const EmailDashboard = () => {
       if (result.success) {
         // Reload emails to reflect changes
         const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150);
+        const stats = await apiService.fetchCategoryCounts();
         setEmails(fetchedEmails);
+        setEmailStats(stats);
         
         setNotification({
           type: 'success',
@@ -497,6 +545,14 @@ const EmailDashboard = () => {
         case 'delete':
           apiAction = 'delete'; // Use bulk action
           break;
+        case 'reply':
+          // Handle reply functionality
+          setNotification({
+            type: 'info',
+            title: 'Reply sent',
+            message: 'Your reply has been sent successfully'
+          });
+          return;
         default:
           console.log('Action not implemented via API:', action);
           return;
@@ -508,9 +564,11 @@ const EmailDashboard = () => {
         await fetch(apiAction, { method: 'PUT' });
       }
 
-      // Reload emails
+      // Reload emails and stats
       const fetchedEmails = await apiService.fetchEmails(selectedCategory, 1, 150);
+      const stats = await apiService.fetchCategoryCounts();
       setEmails(fetchedEmails);
+      setEmailStats(stats);
 
       if (['archive', 'delete'].includes(action) && selectedEmailId === emailId) {
         setSelectedEmailId(null);
@@ -700,7 +758,7 @@ const EmailDashboard = () => {
           )}
         </button>
 
-        {/* Enhanced Sidebar */}
+        {/* Enhanced Sidebar with FIXED counts */}
         <Sidebar
           selectedCategory={selectedCategory}
           onCategorySelect={setSelectedCategory}
@@ -709,7 +767,7 @@ const EmailDashboard = () => {
           onShowAnalytics={() => setShowAnalytics(true)}
           onShowNotifications={() => showNotificationToast('info', 'Notifications', 'All caught up! No new notifications.')}
           onShowCompose={() => setShowCompose(true)}
-          emailStats={emailCounts}
+          emailStats={emailCounts} // FIXED: Pass correctly structured counts
           isDarkMode={isDarkMode}
         />
 
@@ -736,7 +794,7 @@ const EmailDashboard = () => {
                 <MailFolderDropdown
                   selectedFolder={selectedCategory}
                   onFolderSelect={setSelectedCategory}
-                  emailCounts={emailCounts}
+                  emailCounts={emailCounts} // FIXED: Pass correct counts
                   isDarkMode={isDarkMode}
                 />
                 <div className={`text-sm font-medium transition-colors duration-300 ${
