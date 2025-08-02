@@ -267,3 +267,179 @@ router.post('/sample-emails', asyncHandler(async (req: Request, res: Response) =
       body: 'Thank you for your email. I am currently out of the office on vacation and will return on Monday, November 4th. For urgent matters, please contact my colleague Sarah at sarah@company.org. I will respond to your message upon my return.',
       category: 'out_of_office'
     }
+  ];
+
+  try {
+    const emailsToCreate = [];
+    const selectedSamples = enhancedSampleData.slice(0, count);
+
+    for (let i = 0; i < selectedSamples.length; i++) {
+      const sample = selectedSamples[i];
+      const emailData = {
+        accountId: (account._id as any).toString(),
+        messageId: `sample-${Date.now()}-${i}`,
+        from: sample.from,
+        to: [{ address: account.email, name: 'Test Recipient' }],
+        subject: sample.subject,
+        textBody: sample.body,
+        htmlBody: `<p>${sample.body.replace(/\n/g, '<br>')}</p>`,
+        folder: 'inbox',
+        isRead: Math.random() > 0.7, // 30% chance of being read
+        isStarred: Math.random() > 0.9, // 10% chance of being starred
+        receivedDate: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000), // Random date within last week
+        aiCategory: sample.category,
+        aiConfidence: Math.random() * 0.3 + 0.7, // 70-100% confidence
+        aiProcessed: true,
+        actions: []
+      };
+
+      emailsToCreate.push(emailData);
+    }
+
+    const createdEmails = await Email.insertMany(emailsToCreate);
+
+    logger.info(`✅ Created ${createdEmails.length} enhanced sample emails`);
+
+    res.json({
+      success: true,
+      message: `Successfully created ${createdEmails.length} enhanced sample emails`,
+      data: {
+        created: createdEmails.length,
+        categories: {
+          interested: createdEmails.filter(e => e.aiCategory === 'interested').length,
+          meeting_booked: createdEmails.filter(e => e.aiCategory === 'meeting_booked').length,
+          not_interested: createdEmails.filter(e => e.aiCategory === 'not_interested').length,
+          spam: createdEmails.filter(e => e.aiCategory === 'spam').length,
+          out_of_office: createdEmails.filter(e => e.aiCategory === 'out_of_office').length
+        },
+        examples: selectedSamples.map(s => ({ 
+          subject: s.subject.substring(0, 50) + '...', 
+          category: s.category 
+        }))
+      }
+    });
+
+  } catch (error: any) {
+    logger.error('Failed to create sample emails:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create sample emails: ' + error.message
+    });
+  }
+}));
+
+// Test AI classification
+router.post('/test-ai', asyncHandler(async (req: Request, res: Response) => {
+  const { subject, body, from } = req.body;
+
+  if (!subject || !body) {
+    res.status(400).json({
+      success: false,
+      error: 'Subject and body are required'
+    });
+    return;
+  }
+
+  try {
+    const emailData = {
+      subject,
+      textBody: body,
+      from: from || { address: 'test@example.com', name: 'Test User' }
+    };
+
+    const startTime = Date.now();
+    const classification = await aiService.classifyEmail(emailData);
+    const processingTime = Date.now() - startTime;
+
+    res.json({
+      success: true,
+      data: {
+        input: emailData,
+        classification,
+        processingTime: `${processingTime}ms`
+      }
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: 'AI classification failed: ' + error.message
+    });
+  }
+}));
+
+// Monitor sync progress
+router.get('/sync-status', asyncHandler(async (req: Request, res: Response) => {
+  const connectionStatus = imapService?.getConnectionStatus() || {};
+  
+  res.json({
+    success: true,
+    data: {
+      connections: connectionStatus,
+      accounts: Object.keys(connectionStatus).length,
+      timestamp: new Date().toISOString()
+    }
+  });
+}));
+
+// Test notifications
+router.post('/test-notifications', asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const testResults = await notificationService.testNotifications();
+    
+    res.json({
+      success: true,
+      message: 'Notification tests completed',
+      data: testResults
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: 'Notification test failed: ' + error.message
+    });
+  }
+}));
+
+// Clear all sample emails
+router.delete('/clear-samples', asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const result = await Email.deleteMany({
+      messageId: { $regex: /^sample-/ }
+    });
+
+    res.json({
+      success: true,
+      message: `Cleared ${result.deletedCount} sample emails`,
+      data: { deletedCount: result.deletedCount }
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clear sample emails: ' + error.message
+    });
+  }
+}));
+
+// Force fresh sync
+router.post('/force-sync', asyncHandler(async (req: Request, res: Response) => {
+  try {
+    logger.info('🔄 Manual force sync requested');
+    await imapService.forceFreshSync();
+
+    res.json({
+      success: true,
+      message: 'Fresh sync initiated successfully'
+    });
+
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to initiate fresh sync: ' + error.message
+    });
+  }
+}));
+
+// IMPORTANT: Add default export
+export default router;
