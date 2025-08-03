@@ -355,7 +355,8 @@ const EmailDetail = ({
             maxHeight: 'none',
             overflow: 'visible',
             wordBreak: 'break-word',
-            overflowWrap: 'break-word'
+            overflowWrap: 'break-word',
+            color: isDarkMode ? '#ffffff' : '#000000'
           }}
         />
       );
@@ -402,6 +403,11 @@ const EmailDetail = ({
     <div className={`flex-1 flex flex-col h-full ${
       isDarkMode ? 'bg-slate-900/20' : 'bg-white/20'
     } backdrop-blur-sm`}>
+      <style jsx>{`
+        .prose * {
+          color: ${isDarkMode ? '#ffffff !important' : '#000000 !important'};
+        }
+      `}</style>
       {/* Header */}
       <div className={`flex-shrink-0 p-6 border-b ${
         isDarkMode ? 'border-slate-600/40' : 'border-gray-200/60'

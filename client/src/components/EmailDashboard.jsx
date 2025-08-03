@@ -334,6 +334,7 @@ const EmailDashboard = () => {
   const [showCompose, setShowCompose] = useState(false);
   const [notification, setNotification] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isSearchActive, setIsSearchActive] = useState(false);
 
   // Load emails on component mount and category change
   useEffect(() => {
@@ -488,6 +489,12 @@ const EmailDashboard = () => {
   // Event handlers
   const handleSearch = useCallback((term) => {
     setSearchTerm(term);
+    setIsSearchActive(!!term);
+  }, []);
+
+  const clearSearch = useCallback(() => {
+    setSearchTerm('');
+    setIsSearchActive(false);
   }, []);
 
   const handleFilterChange = useCallback((filters) => {

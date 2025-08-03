@@ -1,8 +1,9 @@
 import express, { Request, Response } from 'express';
-import { Email, Draft, EmailAccount } from '../models';
-import { asyncHandler } from '../middleware/errorHandler';
-import { cleanEmailText, extractEmailSnippet } from '../utils/emailUtils';
 import Joi from 'joi';
+import { asyncHandler } from '../middleware/errorHandler';
+import { Draft, Email, EmailAccount } from '../models';
+import { cleanEmailText, extractEmailSnippet } from '../utils/emailUtils';
+import { elasticClient } from '../config/elasticsearch';
 
 const router = express.Router();
 
@@ -106,7 +107,7 @@ router.get('/search', asyncHandler(async (req: Request, res: Response) => {
   } = req.query;
 
   const filter: any = {}; // Don't filter by isDeleted for search
-  
+
   if (q) filter.$text = { $search: q as string };
   if (from) filter['from.address'] = new RegExp(from as string, 'i');
   if (to) filter['to.address'] = new RegExp(to as string, 'i');
@@ -166,6 +167,7 @@ router.post('/bulk-actions', asyncHandler(async (req: Request, res: Response) =>
 
   const { action, emailIds } = value;
 
+  // FIXED THE TYPO HERE
   let updateData: any = { lastActionAt: new Date() };
   const actionEntry = { type: action, timestamp: new Date() };
 
@@ -193,7 +195,7 @@ router.post('/bulk-actions', asyncHandler(async (req: Request, res: Response) =>
 
   const result = await Email.updateMany(
     { _id: { $in: emailIds } }, // Remove isDeleted filter
-    { 
+    {
       ...updateData,
       $push: { actions: actionEntry }
     }
@@ -226,7 +228,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
   const filter: any = {};
 
   if (accountId) filter.accountId = accountId;
-  
+
   // FIXED: Better folder filtering
   if (folder && folder !== 'all') {
     if (['inbox', 'sent', 'drafts', 'archive', 'deleted', 'spam', 'scheduled'].includes(folder as string)) {
@@ -239,7 +241,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
   } else if (folder === 'all') {
     filter.folder = { $ne: 'deleted' }; // Show all except deleted
   }
-  
+
   if (isRead !== undefined) filter.isRead = isRead === 'true';
   if (isStarred !== undefined) filter.isStarred = isStarred === 'true';
   if (isArchived !== undefined) filter.isArchived = isArchived === 'true';
@@ -287,16 +289,45 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
+// This route is placed BEFORE /:id
+router.get('/search-status', asyncHandler(async (req: Request, res: Response) => {
+  try {
+    const health = await elasticClient.cluster.health({
+      timeout: '5s'
+    });
+    res.json({
+      success: true,
+      data: {
+        elasticsearch: {
+          available: true,
+          status: health.status
+        }
+      }
+    });
+  } catch (error: any) {
+    res.status(503).json({
+      success: false,
+      data: {
+        elasticsearch: {
+          available: false,
+          error: error.message
+        }
+      }
+    });
+  }
+}));
+
+
 // GET /api/v1/emails/:id - Get single email with cleaned text
 router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   const email = await Email.findById(req.params.id)
     .populate('accountId', 'email provider')
     .lean();
-  
+
   if (!email) {
-    res.status(404).json({ 
-      success: false, 
-      error: 'Email not found' 
+    res.status(404).json({
+      success: false,
+      error: 'Email not found'
     });
     return;
   }
@@ -315,14 +346,14 @@ router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
 router.put('/:id/read', asyncHandler(async (req: Request, res: Response) => {
   const email = await Email.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       isRead: true,
       lastActionAt: new Date(),
       $push: { actions: { type: 'read', timestamp: new Date() } }
     },
     { new: true }
   );
-  
+
   if (!email) {
     res.status(404).json({ success: false, error: 'Email not found' });
     return;
@@ -335,14 +366,14 @@ router.put('/:id/read', asyncHandler(async (req: Request, res: Response) => {
 router.put('/:id/unread', asyncHandler(async (req: Request, res: Response) => {
   const email = await Email.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       isRead: false,
       lastActionAt: new Date(),
       $push: { actions: { type: 'unread', timestamp: new Date() } }
     },
     { new: true }
   );
-  
+
   if (!email) {
     res.status(404).json({ success: false, error: 'Email not found' });
     return;
@@ -361,7 +392,7 @@ router.put('/:id/star', asyncHandler(async (req: Request, res: Response) => {
 
   const updatedEmail = await Email.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       isStarred: !email.isStarred,
       lastActionAt: new Date(),
       $push: { actions: { type: email.isStarred ? 'unstar' : 'star', timestamp: new Date() } }
@@ -369,10 +400,10 @@ router.put('/:id/star', asyncHandler(async (req: Request, res: Response) => {
     { new: true }
   );
 
-  res.json({ 
-    success: true, 
-    message: `Email ${updatedEmail?.isStarred ? 'starred' : 'unstarred'}`, 
-    data: updatedEmail 
+  res.json({
+    success: true,
+    message: `Email ${updatedEmail?.isStarred ? 'starred' : 'unstarred'}`,
+    data: updatedEmail
   });
 }));
 
@@ -380,7 +411,7 @@ router.put('/:id/star', asyncHandler(async (req: Request, res: Response) => {
 router.put('/:id/archive', asyncHandler(async (req: Request, res: Response) => {
   const email = await Email.findByIdAndUpdate(
     req.params.id,
-    { 
+    {
       isArchived: true,
       folder: 'archive',
       lastActionAt: new Date(),
@@ -388,7 +419,7 @@ router.put('/:id/archive', asyncHandler(async (req: Request, res: Response) => {
     },
     { new: true }
   );
-  
+
   if (!email) {
     res.status(404).json({ success: false, error: 'Email not found' });
     return;

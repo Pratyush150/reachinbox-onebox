@@ -8,7 +8,8 @@ const ElasticsearchStatus = ({ isDarkMode = true }) => {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const response = await fetch('/api/v1/emails/search-status');
+        // FIXED: Use full API URL
+        const response = await fetch('http://65.1.63.189:5001/api/v1/emails/search-status');
         const data = await response.json();
         setStatus(data);
       } catch (error) {
@@ -81,4 +82,3 @@ const ElasticsearchStatus = ({ isDarkMode = true }) => {
 };
 
 export default ElasticsearchStatus;
-

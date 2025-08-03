@@ -1,8 +1,8 @@
 import React, { useState, Fragment } from 'react';
 import { Combobox, Transition } from '@headlessui/react';
-import { MagnifyingGlassIcon, ChevronUpDownIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, ChevronUpDownIcon, CheckIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
-const SearchCombobox = ({ onSearch, placeholder = "Search emails..." }) => {
+const SearchCombobox = ({ onSearch, placeholder = "Search emails...", isDarkMode = true }) => {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
   const [searchResults, setSearchResults] = useState([]);
@@ -53,7 +53,11 @@ const SearchCombobox = ({ onSearch, placeholder = "Search emails..." }) => {
     <div className="relative">
       <Combobox value={selected} onChange={setSelected}>
         <div className="relative">
-          <div className="relative w-full cursor-default overflow-hidden rounded-xl bg-slate-800/50 border border-slate-700/50 backdrop-blur-sm focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-transparent transition-all duration-200">
+          <div className={`relative w-full cursor-default overflow-hidden rounded-xl border backdrop-blur-sm focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-transparent transition-all duration-200 ${
+            isDarkMode 
+              ? 'bg-slate-800/50 border-slate-700/50' 
+              : 'bg-white border-gray-300 shadow-sm'
+          }`}>
             <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
             <Combobox.Input
               className="w-full border-none py-3 pl-10 pr-10 text-white placeholder-slate-400 bg-transparent focus:ring-0 focus:outline-none"
@@ -61,6 +65,18 @@ const SearchCombobox = ({ onSearch, placeholder = "Search emails..." }) => {
               onChange={handleInputChange}
               placeholder={placeholder}
             />
+            {/* Add after the input, before ChevronUpDownIcon */}
+            {query && (
+              <button
+                onClick={() => {
+                  setQuery('');
+                  onSearch('');
+                }}
+                className="absolute right-10 top-1/2 transform -translate-y-1/2 p-1 hover:bg-slate-700 rounded transition-colors"
+              >
+                <XMarkIcon className="h-4 w-4 text-slate-400 hover:text-white" />
+              </button>
+            )}
             <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-3">
               <ChevronUpDownIcon className="h-5 w-5 text-slate-400" aria-hidden="true" />
             </Combobox.Button>

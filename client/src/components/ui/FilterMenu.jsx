@@ -9,7 +9,7 @@ import {
   ClockIcon 
 } from '@heroicons/react/24/solid';
 
-const FilterMenu = ({ onFilterChange, activeFilters = [] }) => {
+const FilterMenu = ({ onFilterChange, activeFilters = [], isDarkMode = true }) => {
   const [selectedFilters, setSelectedFilters] = useState(activeFilters);
 
   const filterOptions = [
@@ -109,7 +109,11 @@ const FilterMenu = ({ onFilterChange, activeFilters = [] }) => {
   return (
     <Menu as="div" className="relative">
       <div>
-        <Menu.Button className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800/30 border border-slate-700/30 rounded-lg text-slate-300 hover:bg-slate-800/50 hover:text-white transition-all duration-200 backdrop-blur-sm">
+        <Menu.Button className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 backdrop-blur-sm border ${
+          isDarkMode 
+            ? 'bg-slate-800/30 border-slate-700/30 text-slate-300 hover:bg-slate-800/50 hover:text-white'
+            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm'
+        }`}>
           <FunnelIcon className="w-4 h-4" />
           <span>Filters</span>
           {selectedFilters.length > 0 && (

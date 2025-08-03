@@ -1,11 +1,11 @@
 import React, { useState, useEffect, Fragment } from 'react';
 import { Dialog, Transition, Tab } from '@headlessui/react';
-import { 
-  XMarkIcon, 
-  ChartBarIcon, 
-  InboxIcon, 
-  BoltIcon, 
-  CalendarIcon, 
+import {
+  XMarkIcon,
+  ChartBarIcon,
+  InboxIcon,
+  BoltIcon,
+  CalendarIcon,
   ExclamationTriangleIcon,
   ArrowTrendingUpIcon,
   ArrowUpIcon,
@@ -86,7 +86,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
       const spamEmails = Math.floor(dailyEmails * ((analyticsData.stats.categories?.spam || 0) / Math.max(totalEmails, 1)) * (0.8 + Math.random() * 0.4));
       
       trendsData.push({
-        date: date.toLocaleDateString('en-US', { 
+        date: date.toLocaleDateString('en-US', {
           weekday: days <= 7 ? 'short' : undefined,
           month: days > 7 ? 'short' : undefined,
           day: 'numeric'
@@ -104,55 +104,55 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
 
   // ENHANCED: Comprehensive category breakdown
   const categoryBreakdown = analyticsData ? [
-    { 
-      name: 'Interested', 
-      count: analyticsData.stats.categories?.interested || 0, 
-      color: 'emerald', 
-      percentage: analyticsData.stats.status.total > 0 
+    {
+      name: 'Interested',
+      count: analyticsData.stats.categories?.interested || 0,
+      color: 'emerald',
+      percentage: analyticsData.stats.status.total > 0
         ? ((analyticsData.stats.categories?.interested || 0) / analyticsData.stats.status.total * 100).toFixed(1)
         : '0',
       trend: 'up',
       value: (analyticsData.stats.categories?.interested || 0) * 5000, // Estimated value
       priority: 'high'
     },
-    { 
-      name: 'Meetings', 
-      count: analyticsData.stats.categories?.meeting_booked || 0, 
-      color: 'blue', 
-      percentage: analyticsData.stats.status.total > 0 
+    {
+      name: 'Meetings',
+      count: analyticsData.stats.categories?.meeting_booked || 0,
+      color: 'blue',
+      percentage: analyticsData.stats.status.total > 0
         ? ((analyticsData.stats.categories?.meeting_booked || 0) / analyticsData.stats.status.total * 100).toFixed(1)
         : '0',
       trend: 'up',
       value: (analyticsData.stats.categories?.meeting_booked || 0) * 8000, // Higher value for meetings
       priority: 'urgent'
     },
-    { 
-      name: 'Not Interested', 
-      count: analyticsData.stats.categories?.not_interested || 0, 
-      color: 'red', 
-      percentage: analyticsData.stats.status.total > 0 
+    {
+      name: 'Not Interested',
+      count: analyticsData.stats.categories?.not_interested || 0,
+      color: 'red',
+      percentage: analyticsData.stats.status.total > 0
         ? ((analyticsData.stats.categories?.not_interested || 0) / analyticsData.stats.status.total * 100).toFixed(1)
         : '0',
       trend: 'down',
       value: 0,
       priority: 'low'
     },
-    { 
-      name: 'Spam', 
-      count: analyticsData.stats.categories?.spam || 0, 
-      color: 'orange', 
-      percentage: analyticsData.stats.status.total > 0 
+    {
+      name: 'Spam',
+      count: analyticsData.stats.categories?.spam || 0,
+      color: 'orange',
+      percentage: analyticsData.stats.status.total > 0
         ? ((analyticsData.stats.categories?.spam || 0) / analyticsData.stats.status.total * 100).toFixed(1)
         : '0',
       trend: 'down',
       value: 0,
       priority: 'low'
     },
-    { 
-      name: 'Out of Office', 
-      count: analyticsData.stats.categories?.out_of_office || 0, 
-      color: 'purple', 
-      percentage: analyticsData.stats.status.total > 0 
+    {
+      name: 'Out of Office',
+      count: analyticsData.stats.categories?.out_of_office || 0,
+      color: 'purple',
+      percentage: analyticsData.stats.status.total > 0
         ? ((analyticsData.stats.categories?.out_of_office || 0) / analyticsData.stats.status.total * 100).toFixed(1)
         : '0',
       trend: 'neutral',
@@ -164,8 +164,8 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
   // ENHANCED: Advanced metric cards
   const StatCard = ({ title, value, subtitle, icon: Icon, color = 'blue', trend, metric }) => (
     <div className={`relative overflow-hidden rounded-xl p-6 backdrop-blur-sm transition-all hover:scale-105 border shadow-lg ${
-      isDarkMode 
-        ? `bg-${color}-500/10 border-${color}-500/20 shadow-${color}-900/20` 
+      isDarkMode
+        ? `bg-${color}-500/10 border-${color}-500/20 shadow-${color}-900/20`
         : `bg-${color}-50 border-${color}-200 shadow-${color}-500/10`
     }`}>
       {/* Background decoration */}
@@ -186,7 +186,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
           </div>
           {trend && (
             <div className={`flex items-center gap-1 text-sm font-medium ${
-              trend.direction === 'up' ? 'text-emerald-400' : 
+              trend.direction === 'up' ? 'text-emerald-400' :
               trend.direction === 'down' ? 'text-red-400' : 'text-slate-400'
             }`}>
               {trend.direction === 'up' && <ArrowUpIcon className="w-4 h-4" />}
@@ -227,108 +227,118 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
     </div>
   );
 
-  // ENHANCED: Interactive Bar Chart with hover effects
-  const InteractiveBarChart = ({ data, maxValue, color = 'blue', title }) => {
-    const [hoveredIndex, setHoveredIndex] = useState(null);
-    
-    return (
-      <div className="space-y-4">
-        <h4 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-          {title}
-        </h4>
-        <div className="h-64 flex items-end justify-between gap-2 p-4">
-          {data.map((item, index) => {
-            const heightPercentage = maxValue > 0 ? (item.emails / maxValue) * 100 : 0;
-            const isHovered = hoveredIndex === index;
+  const InteractiveLineChart = ({ data, maxValue, color = 'blue', title }) => {
+      const [hoveredIndex, setHoveredIndex] = useState(null);
+      
+      // Auto-scale Y-axis with padding
+      const yMax = Math.max(...data.map(d => d.emails)) || 1;
+      const yAxisMax = Math.ceil(yMax * 1.2); // 20% padding
+      const yAxisSteps = 5;
+      const stepSize = Math.ceil(yAxisMax / yAxisSteps);
+      
+      const yLabels = Array.from({ length: yAxisSteps + 1 }, (_, i) => i * stepSize);
+      
+      return (
+        <div className="space-y-4">
+          <h4 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            {title}
+          </h4>
+          
+          <div className="relative h-64 p-4">
+            {/* Y-axis labels */}
+            <div className="absolute left-0 top-0 h-full flex flex-col justify-between text-xs text-slate-400">
+              {yLabels.reverse().map((label, i) => (
+                <span key={i}>{label}</span>
+              ))}
+            </div>
             
-            return (
-              <div 
-                key={index} 
-                className="flex-1 flex flex-col items-center group cursor-pointer"
-                onMouseEnter={() => setHoveredIndex(index)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                <div className="relative w-full mb-2 flex flex-col items-center">
-                  {/* Tooltip */}
-                  {isHovered && (
-                    <div className={`absolute -top-16 left-1/2 transform -translate-x-1/2 px-3 py-2 rounded-lg text-xs font-medium z-10 whitespace-nowrap border ${
-                      isDarkMode 
-                        ? 'bg-slate-800/95 border-slate-600/50 text-white shadow-slate-900/50' 
-                        : 'bg-white/95 border-gray-300/50 text-gray-900 shadow-gray-900/20'
-                    } shadow-lg`}>
-                      <div className="text-center">
-                        <div className="font-semibold">{item.emails} emails</div>
-                        <div className="text-xs opacity-80">{item.date}</div>
-                        {item.interested > 0 && (
-                          <div className="text-emerald-400">{item.interested} interested</div>
-                        )}
-                        {item.meetings > 0 && (
-                          <div className="text-blue-400">{item.meetings} meetings</div>
-                        )}
-                      </div>
-                      {/* Arrow */}
-                      <div className={`absolute top-full left-1/2 transform -translate-x-1/2 w-2 h-2 rotate-45 ${
-                        isDarkMode ? 'bg-slate-800' : 'bg-white'
-                      } border-r border-b ${
-                        isDarkMode ? 'border-slate-600/50' : 'border-gray-300/50'
-                      }`} />
-                    </div>
-                  )}
-                  
-                  {/* Main bar */}
-                  <div 
-                    className={`w-full rounded-t-lg transition-all duration-300 ${
-                      isHovered ? 'scale-110' : ''
-                    } ${
-                      isDarkMode 
-                        ? `bg-gradient-to-t from-${color}-600 to-${color}-400`
-                        : `bg-gradient-to-t from-${color}-500 to-${color}-300`
-                    }`}
-                    style={{ 
-                      height: `${Math.max(heightPercentage, 2)}%`,
-                      minHeight: '4px'
-                    }}
+            {/* Chart area */}
+            <div className="ml-8 h-full relative">
+              <svg width="100%" height="100%" viewBox="0 0 400 200" className="overflow-visible">
+                {/* Grid lines */}
+                {yLabels.map((_, i) => (
+                  <line
+                    key={i}
+                    x1="0"
+                    y1={i * (200 / yAxisSteps)}
+                    x2="400"
+                    y2={i * (200 / yAxisSteps)}
+                    stroke={isDarkMode ? '#374151' : '#e5e7eb'}
+                    strokeWidth="0.5"
                   />
-                  
-                  {/* Interested overlay */}
-                  {item.interested > 0 && (
-                    <div 
-                      className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-lg absolute bottom-0"
-                      style={{ 
-                        height: `${Math.max((item.interested / maxValue) * 100, 1)}%`
-                      }}
-                    />
-                  )}
-                </div>
+                ))}
                 
-                <div className={`text-xs font-medium text-center ${
-                  isDarkMode ? 'text-slate-400' : 'text-gray-600'
-                } ${isHovered ? 'text-white' : ''} transition-colors`}>
-                  {item.date}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        
-        {/* Legend */}
-        <div className="flex justify-center gap-6 mt-4">
-          <div className="flex items-center gap-2">
-            <div className={`w-3 h-3 rounded bg-${color}-500`} />
-            <span className={`text-xs ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-              Total Emails
-            </span>
+                {/* Line path */}
+                <path
+                  d={data.map((item, index) => {
+                    const x = (index / (data.length - 1)) * 400;
+                    const y = 200 - ((item.emails / yAxisMax) * 200);
+                    return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+                  }).join(' ')}
+                  fill="none"
+                  stroke={`rgb(${color === 'blue' ? '59, 130, 246' : '16, 185, 129'})`}
+                  strokeWidth="3"
+                  className="drop-shadow-sm"
+                />
+                
+                {/* Data points */}
+                {data.map((item, index) => {
+                  const x = (index / (data.length - 1)) * 400;
+                  const y = 200 - ((item.emails / yAxisMax) * 200);
+                  const isHovered = hoveredIndex === index;
+                  
+                  return (
+                    <g key={index}>
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={isHovered ? 6 : 4}
+                        fill={`rgb(${color === 'blue' ? '59, 130, 246' : '16, 185, 129'})`}
+                        className="cursor-pointer transition-all"
+                        onMouseEnter={() => setHoveredIndex(index)}
+                        onMouseLeave={() => setHoveredIndex(null)}
+                      />
+                      
+                      {/* Tooltip */}
+                      {isHovered && (
+                        <g>
+                          <rect
+                            x={x - 40}
+                            y={y - 35}
+                            width="80"
+                            height="25"
+                            rx="4"
+                            fill={isDarkMode ? '#1f2937' : 'white'}
+                            stroke={isDarkMode ? '#374151' : '#e5e7eb'}
+                            className="drop-shadow-lg"
+                          />
+                          <text
+                            x={x}
+                            y={y - 20}
+                            textAnchor="middle"
+                            className="text-xs font-medium fill-current"
+                            fill={isDarkMode ? 'white' : '#374151'}
+                          >
+                            {item.emails} emails
+                          </text>
+                        </g>
+                      )}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+            
+            {/* X-axis labels */}
+            <div className="ml-8 flex justify-between text-xs text-slate-400 mt-2">
+              {data.map((item, index) => (
+                <span key={index}>{item.date}</span>
+              ))}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded bg-emerald-500" />
-            <span className={`text-xs ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-              Interested
-            </span>
-          </div>
         </div>
-      </div>
-    );
-  };
+      );
+    };
 
   // ENHANCED: Pie Chart for category distribution
   const PieChart = ({ data, title }) => {
@@ -359,12 +369,12 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
         <div className="flex items-center justify-center">
           <svg width="300" height="300" viewBox="0 0 300 300" className="drop-shadow-lg">
             {/* Background circle */}
-            <circle 
-              cx="150" 
-              cy="150" 
-              r="120" 
-              fill="none" 
-              stroke={isDarkMode ? '#374151' : '#e5e7eb'} 
+            <circle
+              cx="150"
+              cy="150"
+              r="120"
+              fill="none"
+              stroke={isDarkMode ? '#374151' : '#e5e7eb'}
               strokeWidth="2"
             />
             
@@ -397,11 +407,11 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
             ))}
             
             {/* Center circle with total */}
-            <circle 
-              cx="150" 
-              cy="150" 
-              r="50" 
-              fill={isDarkMode ? '#1f2937' : '#ffffff'} 
+            <circle
+              cx="150"
+              cy="150"
+              r="50"
+              fill={isDarkMode ? '#1f2937' : '#ffffff'}
               stroke={isDarkMode ? '#374151' : '#e5e7eb'}
               strokeWidth="2"
             />
@@ -432,7 +442,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
         <div className="grid grid-cols-2 gap-3 mt-4">
           {pieSegments.map((segment, index) => (
             <div key={index} className="flex items-center gap-3">
-              <div 
+              <div
                 className="w-4 h-4 rounded"
                 style={{ backgroundColor: getColorForCategory(segment.color, isDarkMode) }}
               />
@@ -548,8 +558,8 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
               leaveTo="opacity-0 scale-95"
             >
               <Dialog.Panel className={`w-full max-w-7xl rounded-2xl backdrop-blur-sm shadow-2xl overflow-hidden border ${
-                isDarkMode 
-                  ? 'bg-slate-800/95 border-slate-700/50' 
+                isDarkMode
+                  ? 'bg-slate-800/95 border-slate-700/50'
                   : 'bg-white/95 border-gray-300/50'
               }`}>
                 
@@ -576,7 +586,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                       value={selectedTimeRange}
                       onChange={(e) => setSelectedTimeRange(e.target.value)}
                       className={`rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500/50 focus:border-transparent border transition-all ${
-                        isDarkMode 
+                        isDarkMode
                           ? 'bg-slate-700/50 border-slate-600/50 text-white'
                           : 'bg-white/80 border-gray-300/50 text-gray-900'
                       }`}
@@ -589,7 +599,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                     <button
                       onClick={onClose}
                       className={`p-2 rounded-xl transition-colors ${
-                        isDarkMode 
+                        isDarkMode
                           ? 'text-slate-400 hover:text-white hover:bg-slate-700/50'
                           : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100/50'
                       }`}
@@ -672,12 +682,12 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                           {/* Volume Trends Tab */}
                           <Tab.Panel>
                             <div className={`rounded-xl p-6 border ${
-                              isDarkMode 
-                                ? 'bg-slate-700/20 border-slate-600/30' 
+                              isDarkMode
+                                ? 'bg-slate-700/20 border-slate-600/30'
                                 : 'bg-gray-50/80 border-gray-200/60'
                             }`}>
-                              <InteractiveBarChart 
-                                data={generateTrendsData()} 
+                              <InteractiveLineChart
+                                data={generateTrendsData()}
                                 maxValue={Math.max(...generateTrendsData().map(d => d.emails), 1)}
                                 color="blue"
                                 title="📊 Email Volume Over Time"
@@ -689,19 +699,19 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                           <Tab.Panel>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                               <div className={`rounded-xl p-6 border ${
-                                isDarkMode 
-                                  ? 'bg-slate-700/20 border-slate-600/30' 
+                                isDarkMode
+                                  ? 'bg-slate-700/20 border-slate-600/30'
                                   : 'bg-gray-50/80 border-gray-200/60'
                               }`}>
-                                <PieChart 
+                                <PieChart
                                   data={categoryBreakdown.filter(cat => cat.count > 0)}
                                   title="🥧 AI Category Distribution"
                                 />
                               </div>
                               
                               <div className={`rounded-xl p-6 border ${
-                                isDarkMode 
-                                  ? 'bg-slate-700/20 border-slate-600/30' 
+                                isDarkMode
+                                  ? 'bg-slate-700/20 border-slate-600/30'
                                   : 'bg-gray-50/80 border-gray-200/60'
                               }`}>
                                 <h4 className={`text-lg font-semibold mb-6 ${
@@ -713,7 +723,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                                   {categoryBreakdown.map((category, index) => (
                                     <div key={index} className="flex items-center gap-4">
                                       <div className="flex items-center gap-3 w-32">
-                                        <div 
+                                        <div
                                           className="w-4 h-4 rounded-full"
                                           style={{ backgroundColor: getColorForCategory(category.color, isDarkMode) }}
                                         />
@@ -727,9 +737,9 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                                         <div className={`flex-1 h-4 rounded-full overflow-hidden ${
                                           isDarkMode ? 'bg-slate-700' : 'bg-gray-200'
                                         }`}>
-                                          <div 
+                                          <div
                                             className="h-full bg-gradient-to-r transition-all duration-1000"
-                                            style={{ 
+                                            style={{
                                               width: `${Math.min(parseFloat(category.percentage) || 0, 100)}%`,
                                               background: `linear-gradient(90deg, ${getColorForCategory(category.color, isDarkMode)}, ${getColorForCategory(category.color, isDarkMode)}aa)`
                                             }}
@@ -748,7 +758,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                                           </span>
                                         </div>
                                         <div className={`flex items-center gap-1 text-xs min-w-16 ${
-                                          category.trend === 'up' ? 'text-emerald-400' : 
+                                          category.trend === 'up' ? 'text-emerald-400' :
                                           category.trend === 'down' ? 'text-red-400' : 'text-slate-400'
                                         }`}>
                                           {category.trend === 'up' && <ArrowUpIcon className="w-3 h-3" />}
@@ -767,8 +777,8 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                           <Tab.Panel>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                               <div className={`rounded-xl p-6 border ${
-                                isDarkMode 
-                                  ? 'bg-slate-700/20 border-slate-600/30' 
+                                isDarkMode
+                                  ? 'bg-slate-700/20 border-slate-600/30'
                                   : 'bg-gray-50/80 border-gray-200/60'
                               }`}>
                                 <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${
@@ -782,7 +792,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                                       Read Rate
                                     </span>
                                     <span className={`font-medium ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
-                                      {analyticsData.stats.status.total > 0 
+                                      {analyticsData.stats.status.total > 0
                                         ? Math.round(((analyticsData.stats.status.total - analyticsData.stats.status.unread) / analyticsData.stats.status.total) * 100)
                                         : 0}%
                                     </span>
@@ -808,7 +818,7 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                                       Conversion Rate
                                     </span>
                                     <span className={`font-medium ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>
-                                      {analyticsData.stats.status.total > 0 
+                                      {analyticsData.stats.status.total > 0
                                         ? Math.round(((analyticsData.stats.categories?.interested || 0) + (analyticsData.stats.categories?.meeting_booked || 0)) / analyticsData.stats.status.total * 100)
                                         : 0}%
                                     </span>
@@ -817,8 +827,8 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                               </div>
                               
                               <div className={`rounded-xl p-6 border ${
-                                isDarkMode 
-                                  ? 'bg-slate-700/20 border-slate-600/30' 
+                                isDarkMode
+                                  ? 'bg-slate-700/20 border-slate-600/30'
                                   : 'bg-gray-50/80 border-gray-200/60'
                               }`}>
                                 <h3 className={`text-lg font-semibold mb-4 flex items-center gap-2 ${
@@ -867,8 +877,8 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                           {/* Sales Pipeline Tab */}
                           <Tab.Panel>
                             <div className={`rounded-xl p-6 border ${
-                              isDarkMode 
-                                ? 'bg-slate-700/20 border-slate-600/30' 
+                              isDarkMode
+                                ? 'bg-slate-700/20 border-slate-600/30'
                                 : 'bg-gray-50/80 border-gray-200/60'
                             }`}>
                               <h3 className={`text-xl font-semibold mb-6 flex items-center gap-2 ${
@@ -925,9 +935,9 @@ const AnalyticsModal = ({ isOpen, onClose, isDarkMode = true }) => {
                                       </div>
                                     </div>
                                     <div className="flex-1 relative">
-                                      <div 
+                                      <div
                                         className="h-8 rounded-lg transition-all duration-1000"
-                                        style={{ 
+                                        style={{
                                           width: `${stage.width}%`,
                                           background: `linear-gradient(90deg, ${getColorForCategory(stage.color, isDarkMode)}, ${getColorForCategory(stage.color, isDarkMode)}88)`
                                         }}
