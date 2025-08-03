@@ -9,6 +9,7 @@ import AnalyticsModal from './ui/AnalyticsModal';
 import ComposeModal from './ui/ComposeModal';
 import EmailList from './email/EmailList';
 import EmailDetail from './email/EmailDetail';
+import ElasticsearchStatus from './ui/ElasticsearchStatus';
 
 // API Configuration
 const API_BASE = 'http://65.1.63.189:5001/api/v1';
@@ -863,7 +864,7 @@ const EmailDashboard = () => {
                 <MailFolderDropdown
                   selectedFolder={selectedCategory}
                   onFolderSelect={setSelectedCategory}
-                  emailCounts={emailCounts} // FIXED: Pass correct counts
+                  emailCounts={emailCounts}
                   isDarkMode={isDarkMode}
                 />
                 <div className={`text-sm font-medium transition-colors duration-300 ${
@@ -872,6 +873,9 @@ const EmailDashboard = () => {
                   {filteredEmails.length} email{filteredEmails.length !== 1 ? 's' : ''}
                 </div>
               </div>
+
+              {/* ADD THIS: Elasticsearch Status Indicator */}
+              <ElasticsearchStatus isDarkMode={isDarkMode} />
 
               <SearchCombobox
                 onSearch={handleSearch}

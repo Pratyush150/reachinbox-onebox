@@ -5,6 +5,8 @@ import { MagnifyingGlassIcon, ChevronUpDownIcon, CheckIcon } from '@heroicons/re
 const SearchCombobox = ({ onSearch, placeholder = "Search emails..." }) => {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchMetadata, setSearchMetadata] = useState(null);
 
   // Mock search suggestions - in real app, this would be dynamic
   const suggestions = [
@@ -21,9 +23,29 @@ const SearchCombobox = ({ onSearch, placeholder = "Search emails..." }) => {
         item.name.toLowerCase().includes(query.toLowerCase())
       );
 
-  const handleInputChange = (event) => {
+  const handleInputChange = async (event) => {
     const value = event.target.value;
     setQuery(value);
+    
+    if (value.length > 2) {
+      try {
+        // Debounced search with enhanced API call
+        const searchResponse = await fetch(`/api/v1/emails/search?q=${encodeURIComponent(value)}&limit=5`);
+        if (searchResponse.ok) {
+          const data = await searchResponse.json();
+          setSearchResults(data.data.emails || []);
+          setSearchMetadata(data.data.searchMetadata || null);
+        }
+      } catch (error) {
+        console.error('Search failed:', error);
+        setSearchResults([]);
+        setSearchMetadata(null);
+      }
+    } else {
+      setSearchResults([]);
+      setSearchMetadata(null);
+    }
+    
     onSearch(value);
   };
 
@@ -51,12 +73,80 @@ const SearchCombobox = ({ onSearch, placeholder = "Search emails..." }) => {
             leaveTo="opacity-0"
             afterLeave={() => setQuery('')}
           >
-            <Combobox.Options className="absolute z-50 mt-2 max-h-60 w-full overflow-auto rounded-xl bg-slate-800/90 border border-slate-700/50 backdrop-blur-sm shadow-lg ring-1 ring-black/5 focus:outline-none">
-              {filteredSuggestions.length === 0 && query !== '' ? (
+            <Combobox.Options className="absolute z-50 mt-2 max-h-96 w-full overflow-auto rounded-xl bg-slate-800/90 border border-slate-700/50 backdrop-blur-sm shadow-lg ring-1 ring-black/5 focus:outline-none">
+              {/* Search engine indicator */}
+              {searchMetadata && (
+                <div className="px-4 py-2 border-b border-slate-700/50">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-400">
+                      Powered by {searchMetadata.engine === 'elasticsearch' ? '⚡ Elasticsearch' : '🗄️ MongoDB'}
+                    </span>
+                    {searchMetadata.took && (
+                      <span className="text-slate-500">
+                        {searchMetadata.took}ms
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Search results */}
+              {searchResults.length > 0 ? (
+                searchResults.map((email, index) => (
+                  <Combobox.Option
+                    key={email._id}
+                    className={({ active }) =>
+                      `relative cursor-pointer select-none py-3 px-4 transition-colors duration-150 ${
+                        active ? 'bg-blue-500/20 text-blue-300' : 'text-slate-300'
+                      }`
+                    }
+                    value={email}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-medium">
+                        {email.from?.name?.charAt(0) || email.from?.address?.charAt(0) || '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-sm truncate">
+                            {email.from?.name || email.from?.address}
+                          </span>
+                          {email.aiCategory && (
+                            <span className={`px-2 py-0.5 rounded-full text-xs ${
+                              email.aiCategory === 'interested' ? 'bg-emerald-500/20 text-emerald-400' :
+                              email.aiCategory === 'meeting_booked' ? 'bg-blue-500/20 text-blue-400' :
+                              'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {email.aiCategory.replace('_', ' ')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-400 truncate">
+                          {/* Show highlighted snippets if available */}
+                          {email._highlights?.subject ? (
+                            <span dangerouslySetInnerHTML={{ __html: email._highlights.subject[0] }} />
+                          ) : (
+                            email.subject
+                          )}
+                        </div>
+                        {email._highlights?.body && (
+                          <div className="text-xs text-slate-500 mt-1 line-clamp-2">
+                            <span dangerouslySetInnerHTML={{ __html: email._highlights.body[0] }} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {new Date(email.receivedDate).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </Combobox.Option>
+                ))
+              ) : query.length > 2 ? (
                 <div className="relative cursor-default select-none px-4 py-3 text-slate-400">
                   No results found.
                 </div>
               ) : (
+                // Show suggestions when no query
                 filteredSuggestions.map((suggestion) => (
                   <Combobox.Option
                     key={suggestion.id}

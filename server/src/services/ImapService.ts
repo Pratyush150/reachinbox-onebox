@@ -5,6 +5,7 @@ import { Email, EmailAccount, IEmailAccount } from '../models';
 import { AiService } from './AiService';
 import { NotificationService } from './NotificationService';
 import { elasticClient } from '../config/elasticsearch';
+import { indexEmailInElasticsearch, bulkIndexEmails } from '../config/elasticsearch';
 import { logger } from '../utils/logger';
 
 interface ImapConnection {
@@ -311,8 +312,27 @@ export class ImapService extends EventEmitter {
               reject(error);
             });
 
-            fetch.once('end', () => {
-              // Will be handled by message completion
+            fetch.once('end', async () => {
+              if (processed === limit) {
+                clearTimeout(timeout);
+                
+                // Bulk index all processed emails
+                try {
+                  const allProcessedEmails = await Email.find({
+                    accountId: accountId,
+                    receivedDate: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } // Last 24 hours
+                  }).limit(processed);
+                  
+                  await this.bulkIndexEmailsInElasticsearch(allProcessedEmails);
+                } catch (bulkError: any) {
+                  logger.debug('Bulk indexing after sync failed:', bulkError.message);
+                }
+                
+                logger.info(`Completed syncing ${processed} emails for ${account.email}`);
+                this.updateAccountSyncStats(account, processed, 0);
+                this.updateAccountStatus(account, 'completed');
+                resolve();
+              }
             });
 
           } catch (error: any) {
@@ -502,28 +522,24 @@ export class ImapService extends EventEmitter {
 
   private async indexEmailInElasticsearch(email: any): Promise<void> {
     try {
-      await elasticClient.index({
-        index: 'emails',
-        id: (email._id as any).toString(),
-        body: {
-          messageId: email.messageId,
-          accountId: email.accountId,
-          from: email.from.address,
-          to: email.to.map((t: any) => t.address).join(', '),
-          subject: email.subject,
-          body: email.textBody,
-          folder: email.folder,
-          aiCategory: email.aiCategory,
-          aiConfidence: email.aiConfidence,
-          receivedDate: email.receivedDate,
-          isRead: email.isRead,
-          isStarred: email.isStarred,
-          isArchived: email.isArchived
-        }
-      });
+      const success = await indexEmailInElasticsearch(email);
+      if (!success) {
+        logger.debug(`Failed to index email ${email._id} in Elasticsearch`);
+      }
     } catch (error: any) {
       // Don't throw - just log
-      logger.debug(`Failed to index email in Elasticsearch:`, error.message);
+      logger.debug(`Elasticsearch indexing error for ${email._id}:`, error.message);
+    }
+  }
+
+  private async bulkIndexEmailsInElasticsearch(emails: any[]): Promise<void> {
+    if (!emails || emails.length === 0) return;
+    
+    try {
+      const successCount = await bulkIndexEmails(emails);
+      logger.info(`📊 Bulk indexed ${successCount}/${emails.length} emails in Elasticsearch`);
+    } catch (error: any) {
+      logger.debug('Bulk Elasticsearch indexing failed:', error.message);
     }
   }
 
