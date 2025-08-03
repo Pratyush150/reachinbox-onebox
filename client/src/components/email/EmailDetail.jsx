@@ -385,17 +385,12 @@ const EmailDetail = ({
 
   if (!email) {
     return (
-      <div className={`flex-1 flex items-center justify-center ${
-        isDarkMode ? 'text-slate-400' : 'text-gray-500'
-      }`}>
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-            <span className="text-2xl">📧</span>
-          </div>
-          <h3 className="text-lg font-medium mb-2">Select an email</h3>
-          <p className="text-sm">Choose an email from the list to view its details</p>
-        </div>
-      </div>
+      <div 
+        className="flex-1 h-full bg-cover bg-center"
+        style={{
+          backgroundImage: "url('/wallpaper.png')"
+        }}
+      />
     );
   }
 
