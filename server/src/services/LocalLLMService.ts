@@ -458,19 +458,27 @@ Reply:`;
 
       const prompt = this.buildReplyPrompt(email, category, customPrompt);
 
-      logger.debug('🤖 Sending request to Qwen2...');
+      console.log(`🤖 Full prompt sent to Qwen2: "${prompt}"`);
+      console.log(`🤖 Request body:`, JSON.stringify({
+        model: this.modelName,
+        prompt,
+        stream: false,
+        options: {
+          temperature: 0.4,
+          top_p: 0.95,
+          top_k: 50,
+          repeat_penalty: 1.1,
+          max_tokens: 400
+        }
+      }, null, 2));
 
       const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
         model: this.modelName,
         prompt,
         stream: false,
         options: {
-          temperature: 0.4, // Slightly higher for more natural responses
-          top_p: 0.95,
-          top_k: 50,
-          repeat_penalty: 1.1,
-          max_tokens: 400, // Increased for better quality
-          stop: ['\n\n\n', 'Email:', 'From:', 'Subject:', 'Instructions:', 'Context:']
+          temperature: 0.4,
+          max_tokens: 400
         }
       }, {
         timeout: 15000,
@@ -478,12 +486,15 @@ Reply:`;
         headers: { 'Connection': 'close' }
       });
 
+      console.log(`🤖 Full Qwen2 response:`, response.data);
+
       clearTimeout(timeoutId);
 
       const generatedReply = response.data.response?.trim() || '';
-      logger.debug(`🤖 Qwen2 generated ${generatedReply.length} characters`);
+      console.log(`🤖 Raw Qwen2 response: "${generatedReply}"`);
+      console.log(`🤖 Response length: ${generatedReply.length}`);
 
-      if (!generatedReply || generatedReply.length < 20) {
+      if (!generatedReply || generatedReply.length < 10) { // Reduced from 20 to 10
         throw new Error('Qwen2 response too short or empty');
       }
 
