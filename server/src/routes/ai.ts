@@ -5,6 +5,12 @@ import { aiService } from '../services';
 import { analyzeSalesOpportunity } from '../utils/emailUtils';
 import Joi from 'joi';
 
+// FIXED: Add this helper function near the top of the file, after the imports
+function calculatePipelineValueNumeric(insights: any[]): number {
+  const totalValue = insights.reduce((sum, insight) => sum + (insight.totalValue || 0), 0);
+  return totalValue;
+}
+
 const router = express.Router();
 
 // Validation Schemas
@@ -921,7 +927,7 @@ router.get('/insights/summary', asyncHandler(async (req: Request, res: Response)
                 confidence: '$aiConfidence',
                 receivedDate: '$receivedDate'
               },
-              '$$REMOVE'
+              '$REMOVE'
             ]
           }
         }
@@ -968,12 +974,13 @@ router.get('/insights/summary', asyncHandler(async (req: Request, res: Response)
         salesValue: getSalesValue(insight._id, insight.count),
         trend: generateTrendData(insight._id, Number(days))
       })),
+      // FIXED: Update the salesMetrics section - Replace the existing salesMetrics object with this:
       salesMetrics: {
         hotLeads: insights.find(i => i._id === 'interested')?.count || 0,
         scheduledMeetings: insights.find(i => i._id === 'meeting_booked')?.count || 0,
         conversionRate: calculateConversionRate(insights),
         pipelineValue: calculatePipelineValue(insights),
-        estimatedRevenue: Math.round(calculatePipelineValue(insights).replace(/[^0-9]/g, '') * 0.25),
+        estimatedRevenue: Math.round(calculatePipelineValueNumeric(insights) * 0.25), // FIXED: Use numeric function
         avgDealSize: Math.round(insights.reduce((sum, i) => sum + (i.avgDealValue || 0), 0) / Math.max(insights.length, 1))
       },
       recommendations,
@@ -1060,13 +1067,13 @@ function generateWeeklyTrends(insights: any[], days: number) {
 function getSalesValue(category: string, count: number): string {
   switch (category) {
     case 'interested':
-      return `High (${count} potential deals worth $${(count * 5000).toLocaleString()})`;
+      return `High (${count} potential deals worth ${(count * 5000).toLocaleString()})`;
     case 'meeting_booked':
-      return `Very High (${count} active prospects worth $${(count * 8000).toLocaleString()})`;
+      return `Very High (${count} active prospects worth ${(count * 8000).toLocaleString()})`;
     case 'not_interested':
       return `Low (future nurturing)`;
     case 'out_of_office':
-      return `Medium (follow up later - potential $${(count * 3000).toLocaleString()})`;
+      return `Medium (follow up later - potential ${(count * 3000).toLocaleString()})`;
     default:
       return 'Low';
   }
@@ -1085,7 +1092,7 @@ function calculateConversionRate(insights: any[]): string {
 
 function calculatePipelineValue(insights: any[]): string {
   const totalValue = insights.reduce((sum, insight) => sum + (insight.totalValue || 0), 0);
-  return `$${Math.round(totalValue / 1000)}k`;
+  return `${Math.round(totalValue / 1000)}k`;
 }
 
 export default router;

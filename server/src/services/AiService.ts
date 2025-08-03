@@ -32,12 +32,32 @@ export class AiService {
     }
   }
 
-  async generateResponse(email: any, category: string): Promise<string> {
+  // FIXED: Updated to match the route expectations
+  async generateResponse(email: any, category: string, customPrompt?: string): Promise<string> {
     try {
-      return await this.localLLM.generateReply(email, category);
+      return await this.localLLM.generateReply(email, category, customPrompt);
     } catch (error) {
       logger.error('Response generation failed:', error);
       return `Thank you for your email. I'll get back to you soon.`;
+    }
+  }
+
+  // FIXED: Add missing methods that ai.ts route expects
+  isAvailable(): boolean {
+    return this.localLLM.isAvailable();
+  }
+
+  getStatus(): any {
+    return this.localLLM.getStatus();
+  }
+
+  // FIXED: Cleanup method
+  async cleanup(): Promise<void> {
+    try {
+      await this.localLLM.cleanup();
+      logger.info('🧹 AI Service cleaned up');
+    } catch (error) {
+      logger.error('Error during AI cleanup:', error);
     }
   }
 }

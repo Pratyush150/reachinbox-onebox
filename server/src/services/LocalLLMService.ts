@@ -8,7 +8,7 @@ export class LocalLLMService {
   private isInitialized: boolean = false;
   private requestQueue: Set<string> = new Set();
   private maxRequests = 3; // Slightly increased for better throughput
-  private requestTimeout = 10000; // Increased to 10 seconds for better responses
+  private requestTimeout = 15000; // Increased to 15 seconds for better responses
 
   constructor() {
     this.ollamaUrl = process.env.OLLAMA_URL || 'http://localhost:11434';
@@ -273,42 +273,210 @@ Respond with exactly: category:confidence_score (e.g., interested:0.85)`;
     return { category: 'interested', confidence: 0.3 };
   }
 
+  // ENHANCED: Better AI reply generation with improved Qwen LLM usage
   async generateReply(email: any, category: string, customPrompt?: string): Promise<string> {
-    // Use LLM for reply generation if available
-    if (this.isInitialized && this.requestQueue.size < this.maxRequests) {
-      try {
-        return await this.generateLLMReply(email, category, customPrompt);
-      } catch (error) {
-        logger.debug('LLM reply generation failed, using template fallback:', error);
+    // ENHANCED: Always prioritize LLM if available, with multiple attempts
+    if (this.isInitialized) {
+      const maxAttempts = 3;
+      
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          logger.info(`🤖 Attempt ${attempt}: Generating AI reply with Qwen2...`);
+          
+          const generatedReply = await this.generateLLMReply(email, category, customPrompt);
+          
+          // ENHANCED: Stricter quality validation
+          if (this.validateReplyQuality(generatedReply, email, customPrompt)) {
+            logger.info(`✅ High-quality Qwen2 reply generated on attempt ${attempt}`);
+            return this.enhanceReply(generatedReply, email);
+          } else {
+            logger.warn(`⚠️ Qwen2 reply quality insufficient on attempt ${attempt}, retrying...`);
+            // Continue to next attempt
+          }
+          
+        } catch (error: any) {
+          logger.warn(`❌ Qwen2 attempt ${attempt} failed: ${error.message}`);
+          
+          // If last attempt failed, throw error to use fallback
+          if (attempt === maxAttempts) {
+            throw new Error(`All ${maxAttempts} Qwen2 attempts failed`);
+          }
+        }
       }
     }
     
-    // Fallback to enhanced templates
+    // Only use templates if LLM completely fails or unavailable
+    logger.warn('🔄 Using enhanced template fallback (LLM unavailable or failed)');
     return this.generateEnhancedTemplateReply(email, category, customPrompt);
   }
 
+  // ENHANCED: More sophisticated reply quality validation
+  private validateReplyQuality(reply: string, email: any, customPrompt?: string): boolean {
+    if (!reply || reply.length < 25) {
+      logger.debug('Reply too short');
+      return false;
+    }
+    
+    if (reply.length > 1200) {
+      logger.debug('Reply too long');
+      return false;
+    }
+    
+    // Check for AI artifacts that indicate poor generation
+    const badPatterns = [
+      'as an ai', 'i am an ai', 'i cannot', 'i am not able',
+      'sorry, but i', 'i apologize, but', 'however, i must',
+      '[insert', '[your name]', '[company name]', 'lorem ipsum'
+    ];
+    
+    const replyLower = reply.toLowerCase();
+    if (badPatterns.some(pattern => replyLower.includes(pattern))) {
+      logger.debug('Reply contains AI artifacts or placeholders');
+      return false;
+    }
+    
+    // Should contain greeting
+    const senderName = email.from?.name || email.from?.address?.split('@')[0] || '';
+    const firstName = senderName.split(' ')[0].toLowerCase();
+    
+    if (firstName && firstName.length > 1) {
+      if (!replyLower.includes(firstName) && !replyLower.includes('hi ') && !replyLower.includes('hello ')) {
+        logger.debug('Reply missing proper greeting');
+        return false;
+      }
+    }
+    
+    // Custom prompt validation
+    if (customPrompt) {
+      const promptLower = customPrompt.toLowerCase();
+      
+      // Check if reply addresses the custom prompt
+      if (promptLower.includes('pricing') && !replyLower.includes('pricing') && !replyLower.includes('price') && !replyLower.includes('cost')) {
+        logger.debug('Reply does not address pricing request');
+        return false;
+      }
+      
+      if (promptLower.includes('demo') && !replyLower.includes('demo') && !replyLower.includes('demonstration') && !replyLower.includes('show')) {
+        logger.debug('Reply does not address demo request');
+        return false;
+      }
+      
+      if (promptLower.includes('decline') && !replyLower.includes('understand') && !replyLower.includes('appreciate')) {
+        logger.debug('Reply does not properly decline');
+        return false;
+      }
+    }
+    
+    // Should not be overly generic
+    const genericPhrases = [
+      'thank you for your email. i will get back to you',
+      'i appreciate you reaching out',
+      'thank you for contacting us'
+    ];
+    
+    const isGeneric = genericPhrases.some(phrase => 
+      replyLower.includes(phrase.toLowerCase())
+    );
+    
+    if (isGeneric && !customPrompt) {
+      logger.debug('Reply is too generic');
+      return false;
+    }
+    
+    // Must have proper structure (greeting + body + closing)
+    const hasGreeting = /^(hi|hello|dear|greetings)/i.test(reply.trim());
+    const hasClosing = /(best regards|best|sincerely|thank you|thanks)/i.test(reply);
+    
+    if (!hasGreeting || !hasClosing) {
+      logger.debug('Reply missing proper structure');
+      return false;
+    }
+    
+    return true;
+  }
+
+  // ENHANCED: Better prompt construction for Qwen2
+  private buildReplyPrompt(email: any, category: string, customPrompt?: string): string {
+    const senderName = email.from?.name || email.from?.address?.split('@')[0] || 'there';
+    const subject = email.subject || 'your message';
+    const content = email.textBody?.substring(0, 500) || '';
+    
+    if (customPrompt) {
+      return `You are a professional sales representative writing an email reply. Be specific, helpful, and personalized.
+
+Email Details:
+From: ${senderName}
+Subject: ${subject}
+Message: ${content}
+
+Task: ${customPrompt}
+
+Instructions:
+- Write a professional, personalized email reply
+- Address their specific request directly  
+- Be warm but professional
+- Use proper email format with greeting and closing
+- Keep it concise but comprehensive
+- Make it sound natural and human
+
+Reply:`;
+    }
+
+    const categoryPrompts = {
+      interested: `Write a professional reply to someone showing strong buying interest. Be enthusiastic and helpful, focusing on next steps.`,
+      meeting_booked: `Write a professional confirmation reply for a scheduled meeting. Be organized and prepared.`,
+      not_interested: `Write a gracious reply to someone who declined your offer. Be understanding and leave the door open.`,
+      spam: `Write a brief, professional acknowledgment without encouraging further contact.`,
+      out_of_office: `Write a professional acknowledgment of their auto-reply with appropriate follow-up timing.`
+    };
+
+    return `You are a professional sales representative writing a personalized email reply.
+
+Email Details:
+From: ${senderName}  
+Subject: ${subject}
+Message: ${content}
+
+Context: ${categoryPrompts[category as keyof typeof categoryPrompts] || 'Write a professional, helpful reply.'}
+
+Instructions:
+- Be specific to their message, not generic
+- Use proper email format: greeting, body, professional closing
+- Sound natural and human, not robotic
+- Be warm but professional
+- Include actionable next steps when appropriate
+- Keep it conversational but businesslike
+
+Reply:`;
+  }
+
+  // ENHANCED: Improved LLM generation with better error handling
   private async generateLLMReply(email: any, category: string, customPrompt?: string): Promise<string> {
     const requestId = Date.now().toString();
     this.requestQueue.add(requestId);
 
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.requestTimeout);
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout
 
       const prompt = this.buildReplyPrompt(email, category, customPrompt);
+      
+      logger.debug('🤖 Sending request to Qwen2...');
       
       const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
         model: this.modelName,
         prompt,
         stream: false,
         options: { 
-          temperature: 0.3, // Balanced creativity and consistency
-          top_p: 0.9,
-          max_tokens: 300, // Longer responses for better quality
-          stop: ['Email:', 'Prompt:', 'Response:', '\n\n\n']
+          temperature: 0.4, // Slightly higher for more natural responses
+          top_p: 0.95,
+          top_k: 50,
+          repeat_penalty: 1.1,
+          max_tokens: 400, // Increased for better quality
+          stop: ['\n\n\n', 'Email:', 'From:', 'Subject:', 'Instructions:', 'Context:']
         }
       }, { 
-        timeout: this.requestTimeout,
+        timeout: 15000,
         signal: controller.signal,
         headers: { 'Connection': 'close' }
       });
@@ -316,99 +484,51 @@ Respond with exactly: category:confidence_score (e.g., interested:0.85)`;
       clearTimeout(timeoutId);
       
       const generatedReply = response.data.response?.trim() || '';
+      logger.debug(`🤖 Qwen2 generated ${generatedReply.length} characters`);
       
-      // Validate reply quality
-      if (this.validateReply(generatedReply, email)) {
-        return this.enhanceReply(generatedReply, email);
-      } else {
-        throw new Error('Generated reply failed validation');
+      if (!generatedReply || generatedReply.length < 20) {
+        throw new Error('Qwen2 response too short or empty');
       }
       
+      return generatedReply;
+      
     } catch (error: any) {
-      logger.debug('LLM reply generation failed:', error.message);
+      logger.debug(`❌ Qwen2 generation failed: ${error.message}`);
       throw error;
     } finally {
       this.requestQueue.delete(requestId);
     }
   }
 
-  private buildReplyPrompt(email: any, category: string, customPrompt?: string): string {
-    const senderName = email.from?.name || email.from?.address?.split('@')[0] || 'there';
-    const subject = email.subject || 'your message';
-    const content = email.textBody?.substring(0, 400) || '';
-    
-    if (customPrompt) {
-      return `You are a professional email assistant. Write a reply to this email based on the specific request.
-
-Email from: ${senderName}
-Subject: ${subject}
-Content: ${content}
-
-Specific request: ${customPrompt}
-
-Write a professional, personalized email reply that addresses their request. Be concise but warm. Start with "Hi ${senderName}," and sign off appropriately.
-
-Reply:`;
-    }
-
-    const categoryContext = {
-      interested: 'The sender shows buying interest. Be enthusiastic and helpful.',
-      meeting_booked: 'The sender has booked a meeting. Be professional and confirming.',
-      not_interested: 'The sender declined. Be gracious and leave the door open.',
-      spam: 'This appears to be spam. Send a brief, polite response.',
-      out_of_office: 'This is an auto-reply. Acknowledge and mention future follow-up.'
-    };
-
-    return `You are a professional sales representative. Write a personalized email reply.
-
-Email from: ${senderName}
-Subject: ${subject}  
-Content: ${content}
-
-Context: ${categoryContext[category as keyof typeof categoryContext] || 'Respond professionally.'}
-
-Write a professional, warm, and personalized reply. Be specific to their message, not generic. Start with "Hi ${senderName}," and include a proper sign-off.
-
-Reply:`;
-  }
-
-  private validateReply(reply: string, email: any): boolean {
-    // Basic quality checks
-    if (!reply || reply.length < 20) return false;
-    if (reply.length > 1000) return false; // Too long
-    
-    // Should contain greeting
-    const senderName = email.from?.name || email.from?.address?.split('@')[0] || '';
-    if (senderName && !reply.toLowerCase().includes(senderName.toLowerCase().split(' ')[0])) {
-      return false; // Should mention their name
-    }
-    
-    // Should not be generic spam
-    const genericPhrases = ['dear sir/madam', 'to whom it may concern', 'click here now'];
-    if (genericPhrases.some(phrase => reply.toLowerCase().includes(phrase))) {
-      return false;
-    }
-    
-    return true;
-  }
-
+  // ENHANCED: Better reply enhancement
   private enhanceReply(reply: string, email: any): string {
-    // Clean up the reply
     let enhanced = reply.trim();
-    
-    // Ensure proper greeting if missing
     const senderName = email.from?.name || email.from?.address?.split('@')[0] || 'there';
-    if (!enhanced.toLowerCase().startsWith('hi ') && !enhanced.toLowerCase().startsWith('hello ')) {
-      enhanced = `Hi ${senderName},\n\n${enhanced}`;
+    const firstName = senderName.split(' ')[0];
+    
+    // Fix greeting if missing or incorrect
+    if (!enhanced.toLowerCase().startsWith('hi ') && !enhanced.toLowerCase().startsWith('hello ') && 
+        !enhanced.toLowerCase().startsWith('dear ')) {
+      enhanced = `Hi ${firstName},\n\n${enhanced}`;
     }
     
-    // Ensure proper sign-off if missing
-    const signOffs = ['best regards', 'best', 'sincerely', 'thank you', 'thanks'];
+    // Ensure proper paragraph breaks
+    enhanced = enhanced.replace(/\n{3,}/g, '\n\n');
+    
+    // Ensure proper sign-off
+    const signOffs = ['best regards', 'best', 'sincerely', 'thank you', 'thanks', 'cheers'];
     const hasSignOff = signOffs.some(signOff => enhanced.toLowerCase().includes(signOff));
     
     if (!hasSignOff) {
       enhanced += '\n\nBest regards';
     }
+    
+    // Clean up any formatting issues
+    enhanced = enhanced
+      .replace(/\n\s*\n\s*\n/g, '\n\n') // Max 2 line breaks
+      .replace(/\s+/g, ' ') // Multiple spaces to single space
+      .replace(/\n /g, '\n') // Remove spaces after line breaks
+      .trim();
     
     return enhanced;
   }
@@ -607,7 +727,7 @@ Best regards`;
       activeRequests: this.requestQueue.size,
       maxRequests: this.maxRequests,
       requestTimeout: this.requestTimeout,
-      version: '2.0.0 - Enhanced'
+      version: '2.0.0 - Enhanced with Qwen2 LLM'
     };
   }
 
