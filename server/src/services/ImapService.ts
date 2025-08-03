@@ -421,6 +421,17 @@ export class ImapService extends EventEmitter {
               emailDoc.aiCategory = aiResult.category;
               emailDoc.aiConfidence = aiResult.confidence;
               emailDoc.aiProcessed = true;
+              
+              // Add LLM-based sales insights
+              if (aiResult.salesInsights) {
+                emailDoc.aiInsights = {
+                  sentiment: aiResult.salesInsights.intent === 'ready_to_buy' ? 'positive' : 'neutral',
+                  urgency: aiResult.salesInsights.urgency,
+                  intent: aiResult.salesInsights.intent,
+                  keyTopics: aiResult.salesInsights.buyingSignals || [],
+                  suggestedResponse: aiResult.salesInsights.nextAction
+                };
+              }
             } catch (aiError: any) {
               logger.debug('AI classification failed, using fallback:', aiError.message);
               emailDoc.aiCategory = 'interested';

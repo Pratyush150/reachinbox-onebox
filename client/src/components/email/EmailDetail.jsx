@@ -322,7 +322,13 @@ const EmailDetail = ({
       .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
       .replace(/on\w+="[^"]*"/g, '')
       .replace(/javascript:/gi, '')
-      .replace(/vbscript:/gi, '');
+      .replace(/vbscript:/gi, '')
+      // Remove excessive whitespace and empty paragraphs
+      .replace(/\s+/g, ' ')
+      .replace(/<p>\s*<\/p>/gi, '')
+      .replace(/<div>\s*<\/div>/gi, '')
+      .replace(/(<br\s*\/?>){3,}/gi, '<br><br>')
+      .trim();
   };
 
   // FIXED: Better content extraction logic
@@ -341,8 +347,11 @@ const EmailDetail = ({
 
   const renderEmailContent = () => {
     if (!email) return null;
-
-    const content = getEmailContent();
+  
+    // Use original content without aggressive cleaning
+    const content = viewMode === 'html' && email.htmlBody 
+      ? email.htmlBody 
+      : email.textBody || '';
     
     if (viewMode === 'html' && email.htmlBody) {
       return (
@@ -356,12 +365,13 @@ const EmailDetail = ({
             overflow: 'visible',
             wordBreak: 'break-word',
             overflowWrap: 'break-word',
-            color: isDarkMode ? '#ffffff' : '#000000'
+            color: isDarkMode ? '#ffffff' : '#000000',
+            lineHeight: '1.5'
           }}
         />
       );
     }
-
+  
     return (
       <div className={`whitespace-pre-wrap break-words ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
         {content || 'No content'}
@@ -401,6 +411,15 @@ const EmailDetail = ({
       <style jsx>{`
         .prose * {
           color: ${isDarkMode ? '#ffffff !important' : '#000000 !important'};
+        }
+        .prose p {
+          margin: 0.5rem 0 !important;
+        }
+        .prose div {
+          margin: 0.25rem 0 !important;
+        }
+        .prose br + br {
+          display: none;
         }
       `}</style>
       {/* Header */}

@@ -3,27 +3,12 @@
 export function cleanEmailText(text: string): string {
   if (!text) return '';
 
-  // Remove email threading/chain
+  // Less aggressive cleaning - preserve threading but clean formatting
   const cleanText = text
-    // Remove "On [date] [name] wrote:" patterns
-    .replace(/On\s+.+?wrote:\s*\n*/gi, '')
-    // Remove forwarded message headers
-    .replace(/---------- Forwarded message ---------/gi, '')
-    .replace(/From:\s*.+?\n/gi, '')
-    .replace(/Date:\s*.+?\n/gi, '')
-    .replace(/Subject:\s*.+?\n/gi, '')
-    .replace(/To:\s*.+?\n/gi, '')
-    // Remove quote blocks (lines starting with >)
-    .replace(/^>.*$/gm, '')
-    // Remove multiple newlines
-    .replace(/\n{3,}/g, '\n\n')
-    // Remove leading/trailing whitespace
+    // Remove excessive newlines but preserve structure
+    .replace(/\n{4,}/g, '\n\n\n')
+    // Remove leading/trailing whitespace only
     .trim();
-
-  // If the cleaned text is too short, return original
-  if (cleanText.length < 20) {
-    return text;
-  }
 
   return cleanText;
 }

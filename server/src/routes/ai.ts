@@ -64,7 +64,20 @@ router.post('/classify', asyncHandler(async (req: Request, res: Response) => {
   
   try {
     const classification = await aiService.classifyEmail(emailData);
-    const salesAnalysis = analyzeSalesOpportunity(emailData);
+    let salesInsights = null;
+
+    // Generate LLM sales insights for business categories
+    if (['interested', 'meeting_booked', 'not_interested'].includes(classification.category)) {
+      try {
+        salesInsights = await aiService.generateSalesInsights(emailData, classification);
+      } catch (error) {
+        console.warn('LLM sales insights failed, using rule-based fallback');
+        salesInsights = analyzeSalesOpportunity(emailData); // Keep as fallback
+      }
+    } else {
+      salesInsights = analyzeSalesOpportunity(emailData); // Rule-based for other categories
+    }
+    
     const processingTime = Date.now() - startTime;
 
     res.json({
@@ -77,19 +90,13 @@ router.post('/classify', asyncHandler(async (req: Request, res: Response) => {
           confidencePercentage: `${Math.round(classification.confidence * 100)}%`,
           model: aiService.getStatus ? aiService.getStatus().modelName : 'rule-based'
         },
-        salesAnalysis: {
-          purchaseIntent: salesAnalysis.confidence,
-          intent: salesAnalysis.intent,
-          urgency: salesAnalysis.urgency,
-          buyingSignals: salesAnalysis.buyingSignals,
-          nextAction: salesAnalysis.nextAction,
-          responseStrategy: salesAnalysis.responseStrategy
-        },
+        salesAnalysis: salesInsights,
+        llmInsights: salesInsights, // Add LLM insights separately
         insights: {
           sentiment: classification.category === 'interested' ? 'positive' : 
                     classification.category === 'not_interested' ? 'negative' : 'neutral',
-          urgency: salesAnalysis.urgency,
-          priority: salesAnalysis.confidence > 50 ? 'high' : salesAnalysis.confidence > 25 ? 'medium' : 'low'
+          urgency: salesInsights.urgency,
+          priority: salesInsights.confidence > 50 ? 'high' : salesInsights.confidence > 25 ? 'medium' : 'low'
         },
         metadata: {
           processingTime: `${processingTime}ms`,

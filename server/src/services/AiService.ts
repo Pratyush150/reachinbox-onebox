@@ -23,7 +23,8 @@ export class AiService {
     }
   }
 
-  async classifyEmail(email: any): Promise<{ category: string; confidence: number }> {
+  // FIXED: Updated return type to match LocalLLMService
+  async classifyEmail(email: any): Promise<{ category: string; confidence: number; salesInsights?: any }> {
     try {
       return await this.localLLM.classifyEmail(email);
     } catch (error) {
@@ -39,6 +40,16 @@ export class AiService {
     } catch (error) {
       logger.error('Response generation failed:', error);
       return `Thank you for your email. I'll get back to you soon.`;
+    }
+  }
+
+  async generateSalesInsights(email: any, categoryResult?: any): Promise<any> {
+    try {
+      // This will now work because the method in LocalLLMService is public
+      return await this.localLLM.generateSalesInsights(email, categoryResult);
+    } catch (error) {
+      logger.error('Sales insights generation failed:', error);
+      return null;
     }
   }
 

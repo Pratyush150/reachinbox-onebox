@@ -8,7 +8,7 @@ export class LocalLLMService {
   private isInitialized: boolean = false;
   private classificationQueue: Array<{
     email: any;
-    resolve: (result: { category: string; confidence: number }) => void;
+    resolve: (result: { category: string; confidence: number; salesInsights?: any }) => void;
     reject: (error: Error) => void;
   }> = [];
   private isProcessing: boolean = false;
@@ -81,11 +81,15 @@ export class LocalLLMService {
     }
   }
 
-  async classifyEmail(email: any): Promise<{ category: string; confidence: number }> {
+  async classifyEmail(email: any): Promise<{ category: string; confidence: number; salesInsights?: any }> {
     // QUEUE SYSTEM: Add to queue and wait for sequential processing
     if (this.isInitialized) {
       return new Promise((resolve, reject) => {
-        this.classificationQueue.push({ email, resolve, reject });
+        this.classificationQueue.push({ 
+          email, 
+          resolve: (result: { category: string; confidence: number; salesInsights?: any }) => resolve(result),
+          reject 
+        });
         this.processQueue();
       });
     }
@@ -108,11 +112,25 @@ export class LocalLLMService {
       const { email, resolve, reject } = this.classificationQueue.shift()!;
       
       try {
-        const result = await this.classifyWithLLM(email);
+        // Step 1: Category classification
+        const categoryResult = await this.classifyWithLLM(email);
         
-        if (result && this.validateLLMResult(result, email)) {
-          logger.info(`✅ LLM: ${result.category} (${Math.round(result.confidence * 100)}%) - ${this.classificationQueue.length} left`);
-          resolve(result);
+        if (categoryResult && this.validateLLMResult(categoryResult, email)) {
+          // Step 2: Sales insights for business-relevant categories
+          let salesInsights = null;
+          
+          if (['interested', 'meeting_booked', 'not_interested'].includes(categoryResult.category)) {
+            try {
+              salesInsights = await this.generateSalesInsights(email, categoryResult);
+              logger.info(`✅ LLM: ${categoryResult.category} (${Math.round(categoryResult.confidence * 100)}%) + Sales insights - ${this.classificationQueue.length} left`);
+            } catch (insightError) {
+              logger.warn(`⚠️ Sales insights failed, using category only`);
+            }
+          } else {
+            logger.info(`✅ LLM: ${categoryResult.category} (${Math.round(categoryResult.confidence * 100)}%) - ${this.classificationQueue.length} left`);
+          }
+          
+          resolve({ ...categoryResult, salesInsights });
         } else {
           const fallback = this.ruleBasedClassify(email);
           logger.info(`🔧 Fallback: ${fallback.category} (${Math.round(fallback.confidence * 100)}%)`);
@@ -123,8 +141,6 @@ export class LocalLLMService {
         logger.warn(`❌ LLM error, fallback: ${fallback.category}`);
         resolve(fallback);
       }
-
-      // No delay for speed
     }
 
     this.isProcessing = false;
@@ -318,6 +334,104 @@ Classification:`;
     return this.generateTemplateReply(email, category, customPrompt);
   }
 
+  // FIXED: Changed from private to public
+  public async generateSalesInsights(email: any, categoryResult: any): Promise<any> {
+    const prompt = this.buildSalesInsightsPrompt(email, categoryResult);
+    
+    const response = await axios.post(`${this.ollamaUrl}/api/generate`, {
+      model: this.modelName,
+      prompt,
+      stream: false,
+      options: {
+        temperature: 0.2,
+        max_tokens: 100,
+        stop: ['\n\n', 'Email:', 'Analysis:']
+      }
+    }, {
+      timeout: this.requestTimeout,
+      headers: { 'Connection': 'close' }
+    });
+
+    const rawResponse = response.data.response?.trim() || '';
+    return this.parseSalesInsights(rawResponse, email);
+  }
+
+  private buildSalesInsightsPrompt(email: any, categoryResult: any): string {
+    const subject = email.subject || '';
+    const body = (email.textBody || '').substring(0, 300);
+    
+    return `Analyze this ${categoryResult.category} email for sales insights:
+
+Subject: ${subject}
+Content: ${body}
+
+Provide:
+1. Purchase confidence (0-100): How likely they are to buy
+2. Urgency (low/medium/high): How quickly they need a response  
+3. Deal value estimate (1000-50000): Potential deal size in dollars
+4. Key buying signals: What indicates interest
+5. Next action: What to do next
+
+Format:
+Confidence: [0-100]
+Urgency: [low/medium/high]  
+Value: [1000-50000]
+Signals: [key phrases]
+Action: [next step]
+
+Analysis:`;
+  }
+
+  private parseSalesInsights(response: string, email: any): any {
+    const lines = response.split('\n');
+    const insights: any = {
+      confidence: 30,
+      urgency: 'medium',
+      estimatedValue: 5000,
+      buyingSignals: [],
+      nextAction: 'Follow up with prospect',
+      intent: 'unknown'
+    };
+
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      
+      if (lower.includes('confidence:')) {
+        const match = line.match(/(\d+)/);
+        if (match) insights.confidence = Math.min(100, Math.max(0, parseInt(match[1])));
+      }
+      
+      if (lower.includes('urgency:')) {
+        if (lower.includes('high')) insights.urgency = 'high';
+        else if (lower.includes('low')) insights.urgency = 'low';
+        else insights.urgency = 'medium';
+      }
+      
+      if (lower.includes('value:')) {
+        const match = line.match(/(\d+)/);
+        if (match) insights.estimatedValue = Math.min(50000, Math.max(1000, parseInt(match[1])));
+      }
+      
+      if (lower.includes('signals:')) {
+        const signals = line.replace(/.*signals:\s*/i, '').split(',').map(s => s.trim()).filter(s => s.length > 0);
+        insights.buyingSignals = signals.slice(0, 3);
+      }
+      
+      if (lower.includes('action:')) {
+        insights.nextAction = line.replace(/.*action:\s*/i, '').trim() || insights.nextAction;
+      }
+    }
+
+    // Set intent based on confidence
+    if (insights.confidence > 70) insights.intent = 'ready_to_buy';
+    else if (insights.confidence > 50) insights.intent = 'strong_interest';
+    else if (insights.confidence > 30) insights.intent = 'evaluating';
+    else insights.intent = 'low_engagement';
+
+    return insights;
+  }
+
+  // FIXED: Created method for stray code block
   private async generateLLMReply(email: any, category: string, customPrompt?: string): Promise<string> {
     const prompt = this.buildReplyPrompt(email, category, customPrompt);
     
